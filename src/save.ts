@@ -17,7 +17,7 @@ export interface Profile {
 
 const KEY = 'shatterspire.profile.v1';
 const RUN = 'shatterspire.run.v1';
-export const UNLOCK_ALL = typeof location !== 'undefined' && /[?&]unlockall\b/.test(location.search);
+export const UNLOCK_ALL = typeof location !== 'undefined' && (/[?&]unlockall\b/.test(location.search) || location.hash === '#unlockall');
 
 function safeGet(k: string): string | null { try { return localStorage.getItem(k); } catch { return null; } }
 function safeSet(k: string, v: string) { try { localStorage.setItem(k, v); } catch { /* storage unavailable */ } }
