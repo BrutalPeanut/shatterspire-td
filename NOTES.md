@@ -19,7 +19,13 @@
 - Towers: src/render/buildings.ts (KR-style structures with back/front layers) + figures in src/render/towerArt.ts.
 - UI: src/style.css (wood/parchment/stone/gilt, all CSS+SVG), src/ui/icons.ts (SVG icon set), fonts bundled via @fontsource.
 - Menu background is a live "attract mode" demo battle.
-- Next art target: enemies (still simple coloured creatures).
+- Enemies: src/render/enemyArt.ts (character models scaled by power, layer colours kept; small ones sprite-cached 8 frames x 2 facings). `window.__ss.enemies()` shows all 18.
+
+## Audio
+- src/audio/audio.ts: reverb+compressor bus, stereo pan by x, Karplus-Strong plucks, FM bells, layered noise/sub hits; adaptive score (calm harp/pads, taiko+pulse layer during waves via setIntensity).
+
+## UI principle
+- Every icon-only control gets a visible name (top bar captions, ability name plates, recharge/use toasts).
 
 ## Deploy
 - GitHub Pages via .github/workflows/pages.yml (needs Settings > Pages > Source = GitHub Actions).

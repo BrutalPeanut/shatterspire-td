@@ -12,6 +12,8 @@ import { HEROES, HERO_MAP, HERO_XP } from './core/heroes';
 import { PERKS, POWERS, canBuyPerk, powersEarned } from './core/progress';
 import { WORLD_H, WORLD_W, type Difficulty, type Targeting } from './core/types';
 import { Renderer, type Overlay } from './render/renderer';
+import { drawEnemyModel } from './render/enemyArt';
+import { ENEMIES } from './core/enemies';
 import { audio } from './audio/audio';
 import { ICON } from './ui/icons';
 import { clearRun, heroUnlocked, loadProfile, loadRun, mapUnlocked, medalCount, perkPointsLeft, saveProfile, saveRun, towerUnlocked, type Profile } from './save';
@@ -19,18 +21,19 @@ import { clearRun, heroUnlocked, loadProfile, loadRun, mapUnlocked, medalCount, 
 const $ = <T extends HTMLElement = HTMLElement>(sel: string) => document.querySelector(sel) as T;
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]!));
 const fmt = (n: number) => Math.floor(n).toLocaleString();
+const fmtShort = (n: number) => (n >= 1e6 ? `${(n / 1e6).toFixed(n >= 1e7 ? 0 : 1)}M` : n >= 1e5 ? `${Math.floor(n / 1e3)}K` : fmt(n));
 
 document.getElementById('app')!.innerHTML = `
 <div id="game">
   <div id="topbar">
-    <div class="stat lives">${ICON.heart}<span id="lives">0</span></div>
-    <div class="stat gold">${ICON.coin}<span id="gold">0</span></div>
-    <div class="stat">${ICON.swords}<span id="round">0</span></div>
+    <div class="stat lives" title="Lives">${ICON.heart}<div class="sv"><span class="cap">Lives</span><span id="lives">0</span></div></div>
+    <div class="stat gold" title="Gold">${ICON.coin}<div class="sv"><span class="cap">Gold</span><span id="gold">0</span></div></div>
+    <div class="stat" title="Wave">${ICON.swords}<div class="sv"><span class="cap">Wave</span><span id="round">0</span></div></div>
     <div class="spacer"></div>
-    <button class="tbtn btn3d woodb" id="speedBtn" title="Game speed">${ICON.speed}<span id="spd">1×</span></button>
-    <button class="tbtn btn3d woodb" id="autoBtn" title="Auto-start next wave">${ICON.auto}<span class="lbl">Auto</span></button>
+    <button class="tbtn btn3d woodb" id="speedBtn" title="Game speed">${ICON.speed}<span class="tl"><span class="lbl2">Speed</span><span id="spd">1×</span></span></button>
+    <button class="tbtn btn3d woodb" id="autoBtn" title="Auto-start next wave">${ICON.auto}<span class="tl"><span class="lbl2">Auto</span><span class="lbl3">waves</span></span></button>
     <button class="tbtn btn3d greenb" id="startBtn"></button>
-    <button class="tbtn btn3d woodb" id="menuBtn" title="Menu">${ICON.menu}</button>
+    <button class="tbtn btn3d woodb" id="menuBtn" title="Menu">${ICON.menu}<span class="tl"><span class="lbl2">Menu</span></span></button>
   </div>
   <div id="main">
     <div id="field"><canvas id="canvas"></canvas><div id="abil"></div><div id="toast"></div></div>
@@ -141,7 +144,8 @@ canvas.addEventListener('pointerup', (ev) => {
   const p = toWorld(ev);
   if (!wasDown) return;
   if (armedSpell) {
-    if (game.castSpell(armedSpell, p.x, p.y)) audio.play('ability');
+    const spName = game.spells.find((s) => s.id === armedSpell)?.name ?? 'Spell';
+    if (game.castSpell(armedSpell, p.x, p.y)) { audio.play('ability', { x: p.x }); toast(`${spName}!`); }
     armedSpell = null; return;
   }
   if (placing) {
@@ -219,13 +223,14 @@ function refreshTop() {
   if (key === lastTop) return;
   lastTop = key;
   $('#lives').textContent = fmt(Math.max(0, game.lives));
-  $('#gold').textContent = fmt(game.gold);
+  $('#gold').textContent = fmtShort(game.gold);
   $('#round').textContent = game.freeplay ? `${game.round}` : `${game.round}/${game.totalWaves}`;
   $('#spd').textContent = `${speed}×`;
+  ($('#speedBtn').querySelector('.lbl2') as HTMLElement).textContent = window.matchMedia('(orientation: portrait)').matches ? `Speed ${speed}×` : 'Speed';
   $('#autoBtn').classList.toggle('on', profile.settings.autoStart);
   const sb = $('#startBtn');
   const building = game.state === 'build';
-  sb.innerHTML = building ? `${ICON.play}<span>${game.round === 0 ? 'Start' : 'Next'}</span>` : `${ICON.swords}<span class="lbl">Wave</span>`;
+  sb.innerHTML = building ? `${ICON.play}<span class="tl"><span class="lbl2">${game.round === 0 ? 'Start' : 'Next'}</span><span class="lbl3">wave</span></span>` : `${ICON.swords}<span class="tl"><span class="lbl2">Battle</span><span class="lbl3">wave ${game.round}</span></span>`;
   sb.classList.toggle('running', !building);
   sb.classList.toggle('pulse', building && game.round === 0);
 }
@@ -357,30 +362,33 @@ abil.addEventListener('pointerdown', (ev) => {
   const [kind, id, uid] = el.dataset.ab!.split(':');
   if (kind === 's') {
     const sp = game.spells.find((s) => s.id === id)!;
-    if (sp.left > 0 || game.state !== 'wave') { audio.play('error'); return; }
-    if (sp.targeted) { armedSpell = armedSpell === id ? null : id; cancelPlacing(); toast('Tap the map to aim'); }
-    else if (game.castSpell(id)) audio.play('ability');
+    if (game.state !== 'wave') { audio.play('error'); toast(`${sp.name}: use during a wave`); return; }
+    if (sp.left > 0) { audio.play('error'); toast(`${sp.name}: ready in ${Math.ceil(sp.left)}s`); return; }
+    if (sp.targeted) { armedSpell = armedSpell === id ? null : id; cancelPlacing(); toast(`${sp.name}: tap the map to aim`); }
+    else if (game.castSpell(id)) { audio.play('ability'); toast(`${sp.name}!`); }
   } else {
     const t = game.towers.find((x) => x.uid === Number(uid));
-    if (t && game.useAbility(t, id)) audio.play('ability'); else audio.play('error');
+    const ab = t?.abilities.find((a) => a.def.id === id);
+    if (t && ab && game.useAbility(t, id)) { audio.play('ability', { x: t.x }); toast(`${ab.def.name}!`); }
+    else { audio.play('error'); if (ab) toast(game.state !== 'wave' ? `${ab.def.name}: use during a wave` : `${ab.def.name}: ready in ${Math.ceil(ab.left)}s`); }
   }
 });
 let abilKey = '';
 function renderAbil() {
   if (!game) return;
   const g = game;
-  const items: { key: string; icon: string; left: number; cd: number; title: string }[] = [];
+  const items: { key: string; icon: string; left: number; cd: number; title: string; name: string }[] = [];
   const SPELL_ICON: Record<string, string> = { meteor: ICON.meteor, freeze: ICON.hourglass, reinforce: ICON.shield };
-  for (const s of g.spells) items.push({ key: `s:${s.id}:0`, icon: SPELL_ICON[s.id] ?? s.icon, left: s.left, cd: s.cd, title: `${s.name}: ${s.desc}` });
-  for (const t of g.towers) for (const a of t.abilities) items.push({ key: `t:${a.def.id}:${t.uid}`, icon: `<img src="${iconURL(t.defId, t.isHero)}" alt="">`, left: a.left, cd: a.def.cd, title: a.def.name });
+  for (const s of g.spells) items.push({ key: `s:${s.id}:0`, icon: SPELL_ICON[s.id] ?? s.icon, left: s.left, cd: s.cd, title: `${s.name}: ${s.desc}`, name: s.name });
+  for (const t of g.towers) for (const a of t.abilities) items.push({ key: `t:${a.def.id}:${t.uid}`, icon: `<img src="${iconURL(t.defId, t.isHero)}" alt="">`, left: a.left, cd: a.def.cd, title: a.def.name, name: a.def.name });
   const key = items.map((i) => i.key).join(',');
   if (key !== abilKey) {
     abilKey = key;
-    abil.innerHTML = items.map((i) => `<button class="ab" data-ab="${i.key}" title="${esc(i.title)}">${i.icon}<div class="cdv"></div><div class="cdt"></div></button>`).join('');
+    abil.innerHTML = items.map((i) => `<button class="abw" data-ab="${i.key}" title="${esc(i.title)}"><div class="ab">${i.icon}<div class="cdv"></div><div class="cdt"></div></div><div class="abl">${esc(i.name)}</div></button>`).join('');
   }
   const els = abil.children;
   items.forEach((it, i) => {
-    const el = els[i] as HTMLElement;
+    const el = (els[i] as HTMLElement).firstElementChild as HTMLElement;
     const frac = it.left / it.cd;
     const ready = it.left <= 0 && g.state === 'wave';
     el.classList.toggle('ready', ready);
@@ -391,14 +399,15 @@ function renderAbil() {
 }
 
 // ================================================================ events
+const SHOT_SOUND: Record<string, string> = { arrow: 'bow', firearrow: 'bow', thorn: 'bow', shard: 'bow', star: 'fire', fireball: 'fire', comet: 'fire', bomb: 'cannon', bolt: 'zap', ballista: 'ballista', sweep: 'swing', frost: 'frost', potion: 'potion', vine: 'whip' };
 function handleEvents() {
   if (!game) return;
   const g = game;
   for (const e of g.events) {
     switch (e.type) {
-      case 'pop': audio.play(e.big ? 'bigpop' : 'pop'); break;
-      case 'shoot': audio.play(e.kind === 'bolt' ? 'zap' : 'shoot'); break;
-      case 'boom': audio.play('boom'); break;
+      case 'pop': audio.play(e.big ? 'bigpop' : 'pop', { x: e.x }); break;
+      case 'shoot': audio.play(SHOT_SOUND[e.kind] ?? 'bow', { x: e.x }); break;
+      case 'boom': audio.play('boom', { x: e.x }); break;
       case 'leak': audio.play('leak'); break;
       case 'waveStart': audio.play(e.boss ? 'boss' : 'wave'); if (e.boss) toast('⚠ Boss wave!'); break;
       case 'waveEnd': onWaveEnd(e.round, e.reward); break;
@@ -653,7 +662,7 @@ const STEP = 1 / 60;
 function frame(now: number) {
   const dt = Math.min(0.1, (now - last) / 1000);
   last = now;
-  if (!game && attract && menuWrap.classList.contains('on')) tickAttract(dt);
+  if (!game && attract && menuWrap.classList.contains('on')) { tickAttract(dt); audio.setIntensity(0); }
   if (game) {
     if (!paused) {
       acc += dt * speed;
@@ -662,6 +671,7 @@ function frame(now: number) {
       if (n >= 12) acc = 0;
     }
     handleEvents();
+    audio.setIntensity(game.state === 'wave' ? 1 : 0);
     if (placing && ghost) updateGhost(ghost);
     renderer.draw(game, { ghost, selected, targeting: !!armedSpell, cursor });
     refreshTop();
@@ -678,6 +688,25 @@ showMenu('main');
 // Debug/test hook (used by automated playtests).
 (window as unknown as { __ss: unknown }).__ss = {
   get game() { return game; },
+  audio,
+  enemies(time = 1.3) {
+    const ids = ['imp', 'goblin', 'orc', 'troll', 'ogre', 'gloom', 'frostling', 'hexling', 'wraith', 'iron', 'hydra', 'golem', 'behemoth', 'warbeast', 'colossus', 'golemking', 'lich', 'dragon'];
+    const cv = document.createElement('canvas'); cv.width = 1100; cv.height = 700;
+    cv.style.cssText = 'position:fixed;left:0;top:0;width:1100px;height:700px;z-index:99;background:#7cc95a';
+    document.body.appendChild(cv);
+    const c = cv.getContext('2d')!;
+    const pos = [[70, 120], [150, 120], [230, 120], [310, 120], [400, 120], [500, 120], [580, 120], [660, 120], [740, 120], [830, 120], [930, 120], [1030, 120], [130, 330], [380, 330], [650, 330], [920, 350], [200, 620], [600, 620]];
+    ids.forEach((id, i) => {
+      const def = ENEMIES[id];
+      c.save(); c.scale(1, 1);
+      const [x, y] = pos[i];
+      const sc = id === 'dragon' || id === 'lich' || id === 'golemking' || id === 'colossus' || id === 'warbeast' ? 1.6 : 2.2;
+      c.translate(x, y); c.scale(sc, sc);
+      drawEnemyModel(c, { type: id, x: 0, y: 0, angle: 0, wob: time * 3, hp: def.hp, maxHp: def.hp, flash: 0, def }, time, 2);
+      c.restore();
+      c.fillStyle = '#1a0a04'; c.font = 'bold 12px sans-serif'; c.textAlign = 'center'; c.fillText(def.name, x, y + 22);
+    });
+  },
   gallery(time = 1.2) {
     const ids = [...TOWERS.map((t) => t.id), 'aldric', 'lyra', 'grimbeard'];
     const tiersSet = [[0, 0, 0], [3, 2, 0], [0, 2, 5], [2, 0, 5]];

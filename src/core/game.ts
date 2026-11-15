@@ -44,8 +44,8 @@ export interface Particle { x: number; y: number; vx: number; vy: number; t: num
 
 export type GameEvent =
   | { type: 'pop'; x: number; y: number; big: boolean }
-  | { type: 'shoot'; kind: string }
-  | { type: 'boom' }
+  | { type: 'shoot'; kind: string; x: number }
+  | { type: 'boom'; x: number }
   | { type: 'leak'; lives: number }
   | { type: 'waveStart'; round: number; boss: boolean }
   | { type: 'waveEnd'; round: number; reward: number }
@@ -240,7 +240,7 @@ export class Game {
       case 'chest': this.gold += 500; this.text(WORLD_W / 2, 60, '+500 gold', '#ffd23a'); break;
       case 'draught': this.lives += 50; this.text(WORLD_W / 2, 60, '+50 lives', '#7dff8a'); break;
       case 'merc': if (this.freeTower) return false; this.freeTower = true; this.text(WORLD_W / 2, 60, 'Next tower is free!', '#ffd23a'); break;
-      case 'dragonfire': if (!this.enemies.length) return false; for (const e of this.enemies.slice()) this.damage(e, 40, null); this.fx.push({ kind: 'ring', x: WORLD_W / 2, y: WORLD_H / 2, r: 700, t: 0, max: 0.8, color: '#ff5a1a' }); this.events.push({ type: 'boom' }); break;
+      case 'dragonfire': if (!this.enemies.length) return false; for (const e of this.enemies.slice()) this.damage(e, 40, null); this.fx.push({ kind: 'ring', x: WORLD_W / 2, y: WORLD_H / 2, r: 700, t: 0, max: 0.8, color: '#ff5a1a' }); this.events.push({ type: 'boom', x: WORLD_W / 2 }); break;
       case 'hourglass': if (!this.enemies.length) return false; for (const e of this.enemies) if (!e.def.boss) e.stunT = Math.max(e.stunT, 8); break;
       default: return false;
     }
@@ -514,7 +514,7 @@ export class Game {
     for (const e of this.enemies) {
       if (e.dead) continue;
       e.flash = Math.max(0, e.flash - dt);
-      e.wob += dt * 8;
+      e.wob += dt * (3 + e.def.speed / 22) * (e.stunT > 0 || e.blockT > 0 || this.freezeT > 0 ? 0 : 1);
       // DoTs
       if (e.burnT > 0) { e.burnT -= dt; e.burnAcc += e.burnDps * dt; if (e.burnAcc >= 1) { const n = Math.floor(e.burnAcc); e.burnAcc -= n; this.damage(e, n, e.burnBy); if (this.rnd() < 0.3) this.particle(e.x, e.y, '#ff8a2a', 2); } }
       if (e.dead) continue;
@@ -653,7 +653,7 @@ export class Game {
             homing: range === Infinity && !lob ? target : null, depth: 0, dead: false, spin: 0,
           });
         }
-        this.events.push({ type: 'shoot', kind: a.visual });
+        this.events.push({ type: 'shoot', kind: a.visual, x: t.x });
         break;
       }
       case 'melee': case 'pulse': {
@@ -666,13 +666,13 @@ export class Game {
           this.hit(e, a, t); n--;
         }
         this.fx.push({ kind: a.kind === 'melee' ? 'sweep' : 'ring', x: t.x, y: t.y, r: range, t: 0, max: a.kind === 'melee' ? 0.22 : 0.4, color: a.color });
-        this.events.push({ type: 'shoot', kind: a.visual });
+        this.events.push({ type: 'shoot', kind: a.visual, x: t.x });
         break;
       }
       case 'hitscan': {
         this.fx.push({ kind: 'line', x: t.x, y: t.y, x2: target.x, y2: target.y, r: 3, t: 0, max: 0.18, color: a.color });
         this.impact(t, a, target, pierce);
-        this.events.push({ type: 'shoot', kind: 'ballista' });
+        this.events.push({ type: 'shoot', kind: 'ballista', x: t.x });
         break;
       }
       case 'chain': {
@@ -691,7 +691,7 @@ export class Game {
           cur = next;
         }
         this.fx.push({ kind: 'chain', x: t.x, y: t.y, pts, r: 2, t: 0, max: 0.2, color: a.color });
-        this.events.push({ type: 'shoot', kind: a.visual });
+        this.events.push({ type: 'shoot', kind: a.visual, x: t.x });
         break;
       }
       case 'groundfx': {
@@ -729,7 +729,7 @@ export class Game {
       this.hit(e, a, t, dmg); n--;
     }
     this.fx.push({ kind: 'boom', x, y, r: radius, t: 0, max: 0.3, color: a.dtype === 'acid' ? '#9dff3a' : a.dtype === 'magic' ? '#ff9a2a' : '#ffcf6a' });
-    this.events.push({ type: 'boom' });
+    this.events.push({ type: 'boom', x });
     if (a.cluster && depth < a.cluster.depth) {
       for (let k = 0; k < a.cluster.count; k++) {
         const ang = (k / a.cluster.count) * Math.PI * 2;
@@ -877,7 +877,7 @@ export class Game {
       if (fake) this.hit(e, a, fake); else this.damage(e, dmg, null);
     }
     this.fx.push({ kind: 'meteor', x, y, r, t: 0, max: 0.6, color });
-    this.events.push({ type: 'boom' });
+    this.events.push({ type: 'boom', x });
   }
 
   useAbility(t: Tower, id: string): boolean {
