@@ -4,6 +4,7 @@ import { TOWER_MAP } from '../core/towers';
 import { HERO_MAP } from '../core/heroes';
 import { WORLD_H, WORLD_W } from '../core/types';
 import { drawSoldierArt, drawTowerArt } from './towerArt';
+import { drawAmbient, drawSpire, exitPoint, paintMap } from './mapArt';
 
 export interface Overlay {
   ghost?: { defId: string; x: number; y: number; valid: boolean; radius: number; range: number };
@@ -50,80 +51,8 @@ export class Renderer {
     c.width = Math.round(WORLD_W * this.scale * this.dpr); c.height = Math.round(WORLD_H * this.scale * this.dpr);
     const x = c.getContext('2d')!;
     x.scale(this.scale * this.dpr, this.scale * this.dpr);
-    const th = map.theme;
-    x.fillStyle = th.ground; x.fillRect(0, 0, WORLD_W, WORLD_H);
-    let s = 99;
-    const rnd = () => ((s = (s * 16807) % 2147483647) / 2147483647);
-    for (let i = 0; i < 160; i++) { x.globalAlpha = 0.5; circle(x, rnd() * WORLD_W, rnd() * WORLD_H, 10 + rnd() * 40, th.ground2); }
-    x.globalAlpha = 1;
-    // little tufts / flowers / sparkles
-    for (let i = 0; i < 140; i++) {
-      const px = rnd() * WORLD_W, py = rnd() * WORLD_H;
-      if (map.id === 'meadow') { const col = ['#fff7a8', '#ffffff', '#ffb3d1', '#c9b3ff'][i % 4]; for (let k = 0; k < 3; k++) { x.fillStyle = col; x.beginPath(); x.arc(px + (rnd() - 0.5) * 10, py + (rnd() - 0.5) * 10, 2, 0, TAU); x.fill(); } if (i % 5 === 0) { x.strokeStyle = '#4f9a3c'; x.lineWidth = 1.5; for (let k = -1; k <= 1; k++) { x.beginPath(); x.moveTo(px + 14, py + 4); x.lineTo(px + 14 + k * 4, py - 4); x.stroke(); } } }
-      else if (map.id === 'caverns') { x.fillStyle = 'rgba(158,240,255,0.5)'; x.fillRect(px, py, 2, 2); }
-      else if (map.id === 'ember') { if (i % 4 === 0) { x.strokeStyle = 'rgba(255,120,40,0.35)'; x.lineWidth = 2; x.beginPath(); x.moveTo(px, py); x.lineTo(px + 10, py + 6); x.lineTo(px + 16, py + 2); x.stroke(); } else { x.fillStyle = 'rgba(80,40,20,0.35)'; x.beginPath(); x.arc(px, py, 3, 0, TAU); x.fill(); } }
-      else { x.fillStyle = 'rgba(255,255,255,0.8)'; x.beginPath(); x.arc(px, py, 1.6, 0, TAU); x.fill(); }
-    }
-    // path: soft shadow, edge, base, worn lighter center, edge stones
-    const stroke = (p: { x: number; y: number }[]) => { x.beginPath(); p.forEach((pt, i) => (i ? x.lineTo(pt.x, pt.y) : x.moveTo(pt.x, pt.y))); };
-    x.lineCap = 'round'; x.lineJoin = 'round';
-    for (const p of map.paths) { stroke(p); x.strokeStyle = 'rgba(0,0,0,0.18)'; x.lineWidth = PATH_WIDTH + 18; x.stroke(); }
-    for (const p of map.paths) { stroke(p); x.strokeStyle = th.pathEdge; x.lineWidth = PATH_WIDTH + 6; x.stroke(); }
-    for (const p of map.paths) { stroke(p); x.strokeStyle = th.path; x.lineWidth = PATH_WIDTH - 2; x.stroke(); }
-    for (const p of map.paths) { stroke(p); x.strokeStyle = 'rgba(255,255,255,0.13)'; x.lineWidth = PATH_WIDTH * 0.45; x.stroke(); }
-    for (const p of map.paths) {
-      let acc = 0;
-      for (let i = 1; i < p.length; i++) {
-        const a = p[i - 1], b = p[i];
-        const seg = Math.hypot(b.x - a.x, b.y - a.y);
-        acc += seg;
-        if (acc < 17) continue;
-        acc = 0;
-        const nx = -(b.y - a.y) / (seg || 1), ny = (b.x - a.x) / (seg || 1);
-        for (const side of [-1, 1]) {
-          const j = (rnd() - 0.5) * 3;
-          const sx = b.x + nx * side * (PATH_WIDTH / 2 + 1 + j), sy = b.y + ny * side * (PATH_WIDTH / 2 + 1 + j);
-          const rr = 2.2 + rnd() * 2.2;
-          if (map.paths.some((q) => q !== p && distToPath(sx, sy, q) < PATH_WIDTH / 2 + 1)) continue;
-          circle(x, sx, sy + 1, rr, 'rgba(0,0,0,0.18)');
-          circle(x, sx, sy, rr, shade(th.pathEdge, 25 + Math.floor(rnd() * 30)));
-        }
-        if (rnd() < 0.35) circle(x, b.x + (rnd() - 0.5) * PATH_WIDTH * 0.6, b.y + (rnd() - 0.5) * PATH_WIDTH * 0.6, 1.5, 'rgba(0,0,0,0.12)');
-      }
-    }
-    // obstacles
-    for (const o of map.obstacles) {
-      if (o.kind === 'tree') { circle(x, o.x + 3, o.y + 5, o.r, 'rgba(0,0,0,0.18)'); circle(x, o.x, o.y, o.r, '#3e8f3a', '#2c6a2a', 2); circle(x, o.x - o.r * 0.3, o.y - o.r * 0.3, o.r * 0.45, '#56ad4c'); }
-      else if (o.kind === 'pine') { x.fillStyle = 'rgba(0,0,0,0.15)'; x.beginPath(); x.ellipse(o.x + 3, o.y + o.r * 0.8, o.r * 0.8, o.r * 0.3, 0, 0, TAU); x.fill(); x.fillStyle = '#2f6e4a'; x.beginPath(); x.moveTo(o.x, o.y - o.r * 1.2); x.lineTo(o.x + o.r * 0.9, o.y + o.r * 0.8); x.lineTo(o.x - o.r * 0.9, o.y + o.r * 0.8); x.fill(); x.fillStyle = '#ffffff'; x.beginPath(); x.moveTo(o.x, o.y - o.r * 1.2); x.lineTo(o.x + o.r * 0.35, o.y - o.r * 0.4); x.lineTo(o.x - o.r * 0.35, o.y - o.r * 0.4); x.fill(); }
-      else if (o.kind === 'rock') { circle(x, o.x + 3, o.y + 4, o.r, 'rgba(0,0,0,0.2)'); x.fillStyle = '#8b8178'; x.beginPath(); for (let i = 0; i < 7; i++) { const a = (i / 7) * TAU; const rr = o.r * (0.8 + ((i * 37) % 10) / 40); x.lineTo(o.x + Math.cos(a) * rr, o.y + Math.sin(a) * rr); } x.fill(); x.strokeStyle = '#5e5650'; x.lineWidth = 2; x.stroke(); circle(x, o.x - o.r * 0.3, o.y - o.r * 0.3, o.r * 0.3, 'rgba(255,255,255,0.18)'); }
-      else if (o.kind === 'crystal') { x.fillStyle = 'rgba(0,0,0,0.2)'; x.beginPath(); x.ellipse(o.x + 2, o.y + o.r * 0.7, o.r * 0.8, o.r * 0.3, 0, 0, TAU); x.fill(); for (let k = -1; k <= 1; k++) { x.fillStyle = k ? '#7fd8f0' : '#b9f3ff'; x.beginPath(); x.moveTo(o.x + k * o.r * 0.45, o.y - o.r * (k ? 0.8 : 1.3)); x.lineTo(o.x + k * o.r * 0.45 + o.r * 0.3, o.y + o.r * 0.6); x.lineTo(o.x + k * o.r * 0.45 - o.r * 0.3, o.y + o.r * 0.6); x.fill(); x.strokeStyle = '#3a9fbf'; x.lineWidth = 1.5; x.stroke(); } }
-      else if (o.kind === 'water') { x.fillStyle = '#3a8fd6'; x.beginPath(); x.ellipse(o.x, o.y, o.r * 1.3, o.r, 0, 0, TAU); x.fill(); x.strokeStyle = '#d8f0ff'; x.lineWidth = 3; x.stroke(); x.fillStyle = 'rgba(255,255,255,0.35)'; x.beginPath(); x.ellipse(o.x - o.r * 0.3, o.y - o.r * 0.3, o.r * 0.5, o.r * 0.2, -0.3, 0, TAU); x.fill(); }
-      else if (o.kind === 'lava') { const gr = x.createRadialGradient(o.x, o.y, 2, o.x, o.y, o.r * 1.3); gr.addColorStop(0, '#ffe066'); gr.addColorStop(0.5, '#ff7a1a'); gr.addColorStop(1, '#8a2a10'); x.fillStyle = gr; x.beginPath(); x.ellipse(o.x, o.y, o.r * 1.3, o.r, 0, 0, TAU); x.fill(); }
-    }
-    // entrance portals and the spire at the exit
-    for (const p of map.paths) {
-      const a = p[0], b = p[1];
-      const ex = Math.max(16, Math.min(WORLD_W - 16, a.x)), ey = Math.max(16, Math.min(WORLD_H - 16, a.y));
-      void b;
-      x.fillStyle = 'rgba(40,10,60,0.55)'; x.beginPath(); x.arc(ex, ey, 26, 0, TAU); x.fill();
-    }
-    const last = map.paths[0][map.paths[0].length - 1];
-    const sx = Math.max(30, Math.min(WORLD_W - 30, last.x)), sy = Math.max(40, Math.min(WORLD_H - 30, last.y));
-    this.drawSpire(x, sx, sy);
-    const vg = x.createRadialGradient(WORLD_W / 2, WORLD_H / 2, WORLD_H * 0.45, WORLD_W / 2, WORLD_H / 2, WORLD_W * 0.7);
-    vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,0.28)');
-    x.fillStyle = vg; x.fillRect(0, 0, WORLD_W, WORLD_H);
+    paintMap(x, map, this.scale * this.dpr);
     this.bg = c; this.bgMap = map.id;
-  }
-
-  drawSpire(x: CanvasRenderingContext2D, sx: number, sy: number) {
-    x.fillStyle = 'rgba(0,0,0,0.25)'; x.beginPath(); x.ellipse(sx + 4, sy + 18, 26, 9, 0, 0, TAU); x.fill();
-    x.fillStyle = '#d9d2c3'; x.fillRect(sx - 16, sy - 30, 32, 48);
-    x.strokeStyle = '#8f8576'; x.lineWidth = 2; x.strokeRect(sx - 16, sy - 30, 32, 48);
-    for (let i = -2; i <= 1; i++) x.fillRect(sx + i * 9 + 1, sy - 37, 6, 8);
-    x.fillStyle = '#6b4fd6'; x.beginPath(); x.moveTo(sx - 18, sy - 30); x.lineTo(sx, sy - 62); x.lineTo(sx + 18, sy - 30); x.fill();
-    x.fillStyle = '#ffe27a'; x.beginPath(); x.arc(sx, sy - 64, 4, 0, TAU); x.fill();
-    x.fillStyle = '#4a3a2a'; x.beginPath(); x.arc(sx, sy + 8, 7, Math.PI, 0); x.fillRect(sx - 7, sy + 8, 14, 10); x.fill();
   }
 
   // ------------------------------------------------------------ frame
@@ -134,6 +63,7 @@ export class Renderer {
     c.drawImage(this.bg!, 0, 0);
     c.setTransform(this.scale * this.dpr, 0, 0, this.scale * this.dpr, 0, 0);
     const time = g.time;
+    drawAmbient(c, g.map, performance.now() / 1000);
 
     // ground effects
     for (const f of g.ground) {
@@ -150,6 +80,9 @@ export class Renderer {
     const es = g.enemies;
     for (const e of es) if (e.def.giant) this.drawEnemy(c, e, time);
     for (const e of es) if (!e.def.giant) this.drawEnemy(c, e, time);
+
+    const sp = exitPoint(g.map);
+    drawSpire(c, sp.x, sp.y, performance.now() / 1000);
 
     // towers
     const sorted = g.towers.slice().sort((a, b) => a.y - b.y);
