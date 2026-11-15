@@ -1,5 +1,24 @@
 # Handoff notes
 
+## >>> PICK UP HERE (end of 2026-11-15)
+1. **Open + merge the PR for branch `audio-enemies-labels`** (modern audio, enemy character models, name labels on every control, these notes).
+   - Compare link: https://github.com/BrutalPeanut/shatterspire-td/compare/main...audio-enemies-labels?expand=1
+   - Blocked last session: GitHub was signed out in Brian's Chrome. If still signed out, send him https://github.com/login (never type the password).
+   - After merge: check the Actions run (Pages deploy) is green, then `git checkout main && git pull --ff-only`.
+2. Republish the artifact (https://claude.ai/artifact/VwzxiE8yFLsDbxp2C9VpWT) only if main changed beyond this branch. It already has this build.
+3. Give Brian the play link: https://brutalpeanut.github.io/shatterspire-td/?unlockall
+4. Then wait for his playtest feedback. Open threads:
+   - Medium Ember (loses w30) / Summit (w40) and Hard feel too hard for the bot. Decide with him whether that is intended.
+   - Check that the enemy models read clearly on a phone at 3x speed, especially when bosses are crowded.
+   - Check the music volume balance versus SFX on mobile speakers.
+
+### Session checklist (every change)
+- Branch, then run `npx tsc --noEmit` and `npx vite build`, plus `npx vite build --mode single` for the artifact.
+- Run the bot matrix (`npx tsx test/bot.ts <map> <diff> 40`) across 4 maps x easy/medium. It must match the baseline below.
+- Run the Playwright drag test (desktop + touch) against `npx vite preview --port 4173`.
+- Push with `git -c push.negotiate=true push`, open the PR in Chrome, merge it yourself, and confirm Pages is green.
+- Update this file in the same PR.
+
 ## Status (2026-11-15)
 - v1 playable: 10 towers (3 paths x 5 tiers, 5-2-0 crosspath, no paragons), Barracks blockers, layered enemies + giants + bosses (waves 20/30/40), 4 curved spline maps, 3 difficulties, 40 waves + freeplay, 3 heroes, spells, consumable powers, knowledge tree, WebAudio SFX/music, localStorage saves.
 - Unlock everything for testing: `?unlockall` or `#unlockall`.
