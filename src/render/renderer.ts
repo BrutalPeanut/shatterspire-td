@@ -1,5 +1,5 @@
 import type { Enemy, Game, Projectile, Soldier, Tower } from '../core/game';
-import { MAPS, PATH_WIDTH, type MapDef } from '../core/maps';
+import { MAPS, PATH_WIDTH, distToPath, type MapDef } from '../core/maps';
 import { TOWER_MAP } from '../core/towers';
 import { HERO_MAP } from '../core/heroes';
 import { WORLD_H, WORLD_W } from '../core/types';
@@ -57,22 +57,37 @@ export class Renderer {
     // little tufts / flowers / sparkles
     for (let i = 0; i < 140; i++) {
       const px = rnd() * WORLD_W, py = rnd() * WORLD_H;
-      if (map.id === 'meadow') { x.fillStyle = ['#fff7a8', '#ffffff', '#ffb3d1'][i % 3]; x.beginPath(); x.arc(px, py, 2, 0, TAU); x.fill(); }
+      if (map.id === 'meadow') { const col = ['#fff7a8', '#ffffff', '#ffb3d1', '#c9b3ff'][i % 4]; for (let k = 0; k < 3; k++) { x.fillStyle = col; x.beginPath(); x.arc(px + (rnd() - 0.5) * 10, py + (rnd() - 0.5) * 10, 2, 0, TAU); x.fill(); } if (i % 5 === 0) { x.strokeStyle = '#4f9a3c'; x.lineWidth = 1.5; for (let k = -1; k <= 1; k++) { x.beginPath(); x.moveTo(px + 14, py + 4); x.lineTo(px + 14 + k * 4, py - 4); x.stroke(); } } }
       else if (map.id === 'caverns') { x.fillStyle = 'rgba(158,240,255,0.5)'; x.fillRect(px, py, 2, 2); }
-      else if (map.id === 'ember') { x.fillStyle = 'rgba(80,40,20,0.35)'; x.beginPath(); x.arc(px, py, 3, 0, TAU); x.fill(); }
+      else if (map.id === 'ember') { if (i % 4 === 0) { x.strokeStyle = 'rgba(255,120,40,0.35)'; x.lineWidth = 2; x.beginPath(); x.moveTo(px, py); x.lineTo(px + 10, py + 6); x.lineTo(px + 16, py + 2); x.stroke(); } else { x.fillStyle = 'rgba(80,40,20,0.35)'; x.beginPath(); x.arc(px, py, 3, 0, TAU); x.fill(); } }
       else { x.fillStyle = 'rgba(255,255,255,0.8)'; x.beginPath(); x.arc(px, py, 1.6, 0, TAU); x.fill(); }
     }
-    // path
+    // path: soft shadow, edge, base, worn lighter center, edge stones
+    const stroke = (p: { x: number; y: number }[]) => { x.beginPath(); p.forEach((pt, i) => (i ? x.lineTo(pt.x, pt.y) : x.moveTo(pt.x, pt.y))); };
+    x.lineCap = 'round'; x.lineJoin = 'round';
+    for (const p of map.paths) { stroke(p); x.strokeStyle = 'rgba(0,0,0,0.18)'; x.lineWidth = PATH_WIDTH + 18; x.stroke(); }
+    for (const p of map.paths) { stroke(p); x.strokeStyle = th.pathEdge; x.lineWidth = PATH_WIDTH + 6; x.stroke(); }
+    for (const p of map.paths) { stroke(p); x.strokeStyle = th.path; x.lineWidth = PATH_WIDTH - 2; x.stroke(); }
+    for (const p of map.paths) { stroke(p); x.strokeStyle = 'rgba(255,255,255,0.13)'; x.lineWidth = PATH_WIDTH * 0.45; x.stroke(); }
     for (const p of map.paths) {
-      x.lineCap = 'round'; x.lineJoin = 'round';
-      x.beginPath(); p.forEach((pt, i) => (i ? x.lineTo(pt.x, pt.y) : x.moveTo(pt.x, pt.y)));
-      x.strokeStyle = 'rgba(0,0,0,0.15)'; x.lineWidth = PATH_WIDTH + 14; x.stroke();
-      x.strokeStyle = th.pathEdge; x.lineWidth = PATH_WIDTH + 6; x.stroke();
-    }
-    for (const p of map.paths) {
-      x.beginPath(); p.forEach((pt, i) => (i ? x.lineTo(pt.x, pt.y) : x.moveTo(pt.x, pt.y)));
-      x.strokeStyle = th.path; x.lineWidth = PATH_WIDTH - 2; x.stroke();
-      x.setLineDash([2, 18]); x.strokeStyle = 'rgba(0,0,0,0.12)'; x.lineWidth = 6; x.stroke(); x.setLineDash([]);
+      let acc = 0;
+      for (let i = 1; i < p.length; i++) {
+        const a = p[i - 1], b = p[i];
+        const seg = Math.hypot(b.x - a.x, b.y - a.y);
+        acc += seg;
+        if (acc < 17) continue;
+        acc = 0;
+        const nx = -(b.y - a.y) / (seg || 1), ny = (b.x - a.x) / (seg || 1);
+        for (const side of [-1, 1]) {
+          const j = (rnd() - 0.5) * 3;
+          const sx = b.x + nx * side * (PATH_WIDTH / 2 + 1 + j), sy = b.y + ny * side * (PATH_WIDTH / 2 + 1 + j);
+          const rr = 2.2 + rnd() * 2.2;
+          if (map.paths.some((q) => q !== p && distToPath(sx, sy, q) < PATH_WIDTH / 2 + 1)) continue;
+          circle(x, sx, sy + 1, rr, 'rgba(0,0,0,0.18)');
+          circle(x, sx, sy, rr, shade(th.pathEdge, 25 + Math.floor(rnd() * 30)));
+        }
+        if (rnd() < 0.35) circle(x, b.x + (rnd() - 0.5) * PATH_WIDTH * 0.6, b.y + (rnd() - 0.5) * PATH_WIDTH * 0.6, 1.5, 'rgba(0,0,0,0.12)');
+      }
     }
     // obstacles
     for (const o of map.obstacles) {
@@ -93,6 +108,9 @@ export class Renderer {
     const last = map.paths[0][map.paths[0].length - 1];
     const sx = Math.max(30, Math.min(WORLD_W - 30, last.x)), sy = Math.max(40, Math.min(WORLD_H - 30, last.y));
     this.drawSpire(x, sx, sy);
+    const vg = x.createRadialGradient(WORLD_W / 2, WORLD_H / 2, WORLD_H * 0.45, WORLD_W / 2, WORLD_H / 2, WORLD_W * 0.7);
+    vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,0.28)');
+    x.fillStyle = vg; x.fillRect(0, 0, WORLD_W, WORLD_H);
     this.bg = c; this.bgMap = map.id;
   }
 

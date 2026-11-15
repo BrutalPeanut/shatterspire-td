@@ -59,7 +59,7 @@ export type GameEvent =
 export interface Spell { id: string; name: string; icon: string; cd: number; left: number; targeted: boolean; desc: string }
 
 export const DIFF = {
-  easy: { lives: 200, cost: 0.85, speed: 0.9, giantHp: 1.0, label: 'Easy' },
+  easy: { lives: 200, cost: 0.85, speed: 0.9, giantHp: 0.85, label: 'Easy' },
   medium: { lives: 150, cost: 1.0, speed: 1.0, giantHp: 1.0, label: 'Medium' },
   hard: { lives: 100, cost: 1.08, speed: 1.1, giantHp: 1.25, label: 'Hard' },
 } as const;
