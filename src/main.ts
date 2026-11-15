@@ -103,7 +103,7 @@ canvas.addEventListener('pointerup', (ev) => {
     updateGhost(p);
     if (ghost?.valid) {
       const t = game.placeTower(placing, p.x, p.y);
-      if (t) { audio.play('place'); placing = null; ghost = undefined; select(t); }
+      if (t) { audio.play('place'); placing = null; ghost = undefined; panelKey = ''; }
     } else audio.play('error');
     return;
   }
@@ -578,3 +578,6 @@ requestAnimationFrame(frame);
 document.addEventListener('visibilitychange', () => { if (document.hidden && game && game.state === 'wave' && !paused) pauseMenu(); });
 
 showMenu('main');
+
+// Debug/test hook (used by automated playtests).
+(window as unknown as { __ss: unknown }).__ss = { get game() { return game; } };

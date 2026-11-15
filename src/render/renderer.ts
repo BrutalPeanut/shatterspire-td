@@ -226,7 +226,7 @@ export class Renderer {
     c.globalAlpha = shadowed ? 0.45 : 1;
     // ground shadow
     c.fillStyle = 'rgba(0,0,0,0.2)'; c.beginPath(); c.ellipse(x + 2, y + r * 0.8, r * 0.9, r * 0.35, 0, 0, TAU); c.fill();
-    const col = e.flash > 0 ? '#ffffff' : d.color;
+    const col = e.flash > 0 ? (d.giant ? shade(d.color, 50) : '#ffffff') : d.color;
     if (d.giant) this.drawGiant(c, e, x, y, col, time);
     else {
       // body
