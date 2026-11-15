@@ -535,7 +535,10 @@ menu.addEventListener('click', (ev) => {
     case 'sfx': profile.settings.sfx = !profile.settings.sfx; audio.setSfx(profile.settings.sfx); saveProfile(profile); showMenu('settings'); break;
     case 'music': profile.settings.music = !profile.settings.music; audio.setMusic(profile.settings.music); saveProfile(profile); showMenu('settings'); break;
     case 'auto': profile.settings.autoStart = !profile.settings.autoStart; saveProfile(profile); showMenu('settings'); break;
-    case 'wipe': if (confirm('Erase all medals, perks, powers and unlocks?')) { try { localStorage.clear(); } catch { /* ignore */ } profile = loadProfile(); showMenu('main'); } break;
+    case 'wipe':
+      if (el.dataset.armed) { try { localStorage.removeItem('shatterspire.profile.v1'); localStorage.removeItem('shatterspire.run.v1'); } catch { /* ignore */ } profile = loadProfile(); showMenu('main'); }
+      else { el.dataset.armed = '1'; el.textContent = 'Tap again to erase everything'; }
+      break;
   }
 });
 
