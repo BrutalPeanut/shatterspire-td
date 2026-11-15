@@ -17,6 +17,14 @@
 - GitHub Pages via .github/workflows/pages.yml (needs Settings > Pages > Source = GitHub Actions).
 - Artifact build: `npx vite build --mode single` -> dist-single/index.html.
 
+## UI
+- Towers: drag from shop onto map (touch lifts ghost 42px above finger); tap card = tap-to-place fallback.
+- Auto-start toggle in top bar (Auto) + pause menu.
+- Tower/hero art lives in src/render/towerArt.ts; `window.__ss.gallery()` renders every model at 4 tier states.
+
+## Workflow
+- No GitHub API token in the cloud session: PRs are opened/merged through the browser.
+
 ## Ideas / next
 - Playtest feedback from Brian; tune boss HP and late-wave density.
 - Parked: merge mode, async/real-time multiplayer, roguelike relics.

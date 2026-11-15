@@ -21,7 +21,7 @@ document.getElementById('app')!.innerHTML = `
     <div class="stat">🌊 <span id="round">0</span></div>
     <div class="spacer"></div>
     <button class="tbtn" id="speedBtn" title="Game speed">1×</button>
-    <button class="tbtn" id="autoBtn" title="Auto-start waves">⟳</button>
+    <button class="tbtn" id="autoBtn" title="Auto-start next wave">Auto</button>
     <button class="tbtn" id="startBtn">▶ Start</button>
     <button class="tbtn" id="menuBtn" title="Menu">☰</button>
   </div>
@@ -60,10 +60,48 @@ function layout() {
 window.addEventListener('resize', () => setTimeout(layout, 50));
 window.addEventListener('orientationchange', () => setTimeout(layout, 200));
 
-function toWorld(ev: PointerEvent) {
+const TOUCH_LIFT = 42; // css px: keep the tower visible above the finger
+function toWorld(ev: PointerEvent, lift = false) {
   const r = canvas.getBoundingClientRect();
-  return { x: ((ev.clientX - r.left) / r.width) * WORLD_W, y: ((ev.clientY - r.top) / r.height) * WORLD_H };
+  const dy = lift && ev.pointerType !== 'mouse' ? TOUCH_LIFT : 0;
+  return { x: ((ev.clientX - r.left) / r.width) * WORLD_W, y: ((ev.clientY - dy - r.top) / r.height) * WORLD_H };
 }
+function overCanvas(ev: PointerEvent) {
+  const r = canvas.getBoundingClientRect();
+  return ev.clientX >= r.left && ev.clientX <= r.right && ev.clientY >= r.top && ev.clientY <= r.bottom;
+}
+
+// Drag a tower straight from the shop onto the map.
+let drag: { id: string; x: number; y: number; active: boolean } | null = null;
+document.addEventListener('pointerdown', (ev) => {
+  const card = (ev.target as HTMLElement).closest('[data-a="buy"]') as HTMLElement | null;
+  if (!card || !game) return;
+  audio.init();
+  ev.preventDefault();
+  drag = { id: card.dataset.v!, x: ev.clientX, y: ev.clientY, active: false };
+});
+window.addEventListener('pointermove', (ev) => {
+  if (!drag || !game) return;
+  if (!drag.active && Math.hypot(ev.clientX - drag.x, ev.clientY - drag.y) > 8) {
+    const id = drag.id;
+    if (id !== 'hero' && !towerUnlocked(profile, id)) { drag = null; return; }
+    if (game.gold < game.towerCost(id)) { audio.play('error'); toast('Not enough gold'); drag = null; return; }
+    drag.active = true; select(null); placing = id; panelKey = '';
+  }
+  if (drag.active) { if (overCanvas(ev)) updateGhost(toWorld(ev, true)); else ghost = undefined; }
+});
+window.addEventListener('pointerup', (ev) => {
+  if (!drag || !game) return;
+  const d = drag; drag = null;
+  if (!d.active) { beginPlacing(d.id); return; } // simple tap: tap-to-place fallback
+  if (overCanvas(ev)) {
+    updateGhost(toWorld(ev, true));
+    if (ghost?.valid) { if (game.placeTower(d.id, ghost.x, ghost.y)) audio.play('place'); }
+    else audio.play('error');
+  }
+  cancelPlacing();
+});
+window.addEventListener('pointercancel', () => { if (drag?.active) cancelPlacing(); drag = null; });
 
 function toast(msg: string) {
   const el = document.createElement('div');
@@ -81,13 +119,13 @@ canvas.addEventListener('pointerdown', (ev) => {
   pointerDown = true;
   const p = toWorld(ev);
   cursor = p;
-  if (placing) { updateGhost(p); return; }
+  if (placing) { updateGhost(toWorld(ev, true)); return; }
 });
 canvas.addEventListener('pointermove', (ev) => {
   if (!game) return;
   const p = toWorld(ev);
   cursor = p;
-  if (placing && (pointerDown || ev.pointerType === 'mouse')) updateGhost(p);
+  if (placing && !drag && (pointerDown || ev.pointerType === 'mouse')) updateGhost(toWorld(ev, true));
 });
 canvas.addEventListener('pointerup', (ev) => {
   if (!game) return;
@@ -100,9 +138,9 @@ canvas.addEventListener('pointerup', (ev) => {
     armedSpell = null; return;
   }
   if (placing) {
-    updateGhost(p);
+    updateGhost(toWorld(ev, true));
     if (ghost?.valid) {
-      const t = game.placeTower(placing, p.x, p.y);
+      const t = game.placeTower(placing, ghost.x, ghost.y);
       if (t) { audio.play('place'); placing = null; ghost = undefined; panelKey = ''; }
     } else audio.play('error');
     return;
@@ -150,8 +188,16 @@ function select(t: Tower | null) { selected = t; panelKey = ''; if (t) audio.pla
 // ================================================================ top bar
 $('#startBtn').addEventListener('click', () => { audio.init(); startWave(); });
 $('#speedBtn').addEventListener('click', cycleSpeed);
-$('#autoBtn').addEventListener('click', () => { profile.settings.autoStart = !profile.settings.autoStart; saveProfile(profile); refreshTop(); });
+$('#autoBtn').addEventListener('click', () => { audio.init(); toggleAuto(); });
 $('#menuBtn').addEventListener('click', () => { audio.init(); pauseMenu(); });
+
+function toggleAuto() {
+  profile.settings.autoStart = !profile.settings.autoStart;
+  saveProfile(profile);
+  toast(profile.settings.autoStart ? '⏩ Auto-start ON: waves start automatically' : 'Auto-start OFF');
+  lastTop = '';
+  if (profile.settings.autoStart && game && game.state === 'build' && game.round > 0) setTimeout(() => { if (game && game.state === 'build' && !paused && profile.settings.autoStart) game.startWave(); }, 800);
+}
 
 function startWave() {
   if (!game) return;
@@ -170,6 +216,7 @@ function refreshTop() {
   $('#round').textContent = game.freeplay ? `${game.round}` : `${game.round}/${game.totalWaves}`;
   $('#speedBtn').textContent = `${speed}×`;
   $('#autoBtn').classList.toggle('on', profile.settings.autoStart);
+  $('#autoBtn').textContent = profile.settings.autoStart ? 'Auto ✓' : 'Auto';
   const sb = $('#startBtn');
   const building = game.state === 'build';
   sb.textContent = building ? (game.round === 0 ? '▶ Start' : '▶ Next') : '⚔ Wave';
@@ -184,7 +231,7 @@ side.addEventListener('click', (ev) => {
   if (!el || !game) return;
   audio.init();
   const a = el.dataset.a!, v = el.dataset.v ?? '';
-  if (a === 'buy') beginPlacing(v);
+  if (a === 'buy') return;
   else if (a === 'up') buyUpgrade(Number(v));
   else if (a === 'sell') sellSelected();
   else if (a === 'close') select(null);
@@ -221,14 +268,14 @@ function iconURL(defId: string, isHero: boolean) {
   iconCache.set(k, url);
   return url;
 }
-const img = (defId: string, isHero = false, size = 44) => `<img src="${iconURL(defId, isHero)}" width="${size}" height="${size}" alt="">`;
+const img = (defId: string, isHero = false, size = 52) => `<img src="${iconURL(defId, isHero)}" width="${size}" height="${size}" alt="">`;
 
 function renderSide() {
   if (!game) return;
   const g = game;
   const t = selected && g.towers.includes(selected) ? selected : null;
   if (!t && selected) selected = null;
-  const key = t ? `t${t.uid}|${t.tiers.join('')}|${t.targeting}|${t.level}|${Math.floor(t.bank)}` : `shop|${placing}|${profile.totalRounds}|${g.heroPlaced}|${g.freeTower}`;
+  const key = t ? `t${t.uid}|${t.tiers.join('')}|${t.targeting}|${t.level}|${Math.floor(t.bank)}` : `shop|${placing}|${!!drag?.active}|${profile.totalRounds}|${g.heroPlaced}|${g.freeTower}`;
   if (key !== panelKey) {
     panelKey = key;
     side.innerHTML = t ? towerPanel(t) : shopPanel();
@@ -241,7 +288,7 @@ function renderSide() {
 function shopPanel() {
   const g = game!;
   let h = '';
-  if (placing) h += `<div class="placing">Placing <b>${placing === 'hero' ? g.heroDef.name : TOWER_MAP[placing].name}</b>. Tap or drag on the map, release to build.<div class="row"><button class="btn" data-a="cancel">✕ Cancel</button></div></div>`;
+  if (placing && !drag?.active) { const nm = placing === 'hero' ? g.heroDef.name : TOWER_MAP[placing].name; const ds = placing === 'hero' ? g.heroDef.desc : TOWER_MAP[placing].desc; h += `<div class="placing"><b>${esc(nm)}</b>: ${esc(ds)}<div class="hint" style="margin:4px 0 0">Tap the map to build it here.</div><div class="row"><button class="btn" data-a="cancel">✕ Cancel</button></div></div>`; }
   if (g.freeTower) h += `<div class="hint">📜 Your next tower is free!</div>`;
   h += '<div class="shop">';
   if (!g.heroPlaced) {
@@ -258,7 +305,7 @@ function shopPanel() {
   h += '</div>';
   const pw = Object.values(profile.powers).reduce((a, b) => a + b, 0);
   h += `<div class="row"><button class="btn" data-a="powers">✨ Powers (${pw})</button></div>`;
-  h += `<div class="hint">Tap a tower, then tap the map to build. Tap a built tower to upgrade it.<br>Enemies shatter into smaller enemies. Watch for <b>Ironclads</b> (immune to sharp), <b>Glooms</b> (immune to blast), <b>Frostlings</b> (immune to cold), <b>Hexlings</b> (immune to magic) and <b>Shadowed</b> enemies (need True Sight).</div>`;
+  h += `<div class="hint">👆 <b>Drag</b> a tower onto the map to build. Tap a built tower to upgrade it.</div>`;
   return h;
 }
 
@@ -368,7 +415,7 @@ function onWaveEnd(round: number, reward: number) {
   if (game.state === 'build') saveRun(game);
   void reward;
   panelKey = '';
-  if (profile.settings.autoStart && game.state === 'build') setTimeout(() => { if (game && game.state === 'build' && !paused) game.startWave(); }, 600);
+  if (profile.settings.autoStart && game.state === 'build') setTimeout(() => { if (game && game.state === 'build' && !paused && profile.settings.autoStart) game.startWave(); }, 900);
 }
 
 function onGameEnd(won: boolean) {
@@ -409,6 +456,7 @@ modalEl.addEventListener('click', (ev) => {
   else if (m === 'freeplay') { game?.continueFreeplay(); endHandled = false; closeModal(); if (game) saveRun(game); }
   else if (m === 'restart') { if (game) startGame(game.map.id, game.diff, game.heroId); closeModal(); }
   else if (m === 'menu') { if (game && game.state === 'build' && game.round > 0) saveRun(game); closeModal(); showMenu('main'); }
+  else if (m === 'auto') { toggleAuto(); pauseMenu(); }
   else if (m === 'sfx') { profile.settings.sfx = !profile.settings.sfx; audio.setSfx(profile.settings.sfx); saveProfile(profile); pauseMenu(); }
   else if (m === 'music') { profile.settings.music = !profile.settings.music; audio.setMusic(profile.settings.music); saveProfile(profile); pauseMenu(); }
   else if (m.startsWith('power:')) {
@@ -421,6 +469,7 @@ modalEl.addEventListener('click', (ev) => {
 function pauseMenu() {
   modal(`<h2>Paused</h2>
     <button class="mbtn big" data-m="resume">Resume</button>
+    <button class="mbtn" data-m="auto">Auto-start waves: ${profile.settings.autoStart ? 'On' : 'Off'}</button>
     <button class="mbtn" data-m="sfx">Sound: ${profile.settings.sfx ? 'On' : 'Off'}</button>
     <button class="mbtn" data-m="music">Music: ${profile.settings.music ? 'On' : 'Off'}</button>
     <button class="mbtn" data-m="restart">Restart Map</button>
@@ -583,4 +632,19 @@ document.addEventListener('visibilitychange', () => { if (document.hidden && gam
 showMenu('main');
 
 // Debug/test hook (used by automated playtests).
-(window as unknown as { __ss: unknown }).__ss = { get game() { return game; } };
+(window as unknown as { __ss: unknown }).__ss = {
+  get game() { return game; },
+  gallery(time = 1.2) {
+    const ids = [...TOWERS.map((t) => t.id), 'aldric', 'lyra', 'grimbeard'];
+    const tiersSet = [[0, 0, 0], [3, 2, 0], [0, 2, 5], [2, 0, 5]];
+    const cv = document.createElement('canvas');
+    const cell = 150; cv.width = cell * 4; cv.height = cell * ids.length * 0.62;
+    cv.style.cssText = 'position:fixed;inset:0;z-index:99;background:#7cc95a';
+    document.body.appendChild(cv);
+    const c = cv.getContext('2d')!;
+    ids.forEach((id, row) => tiersSet.forEach((tiers, col) => {
+      const hero = ['aldric', 'lyra', 'grimbeard'].includes(id);
+      renderer.drawTowerBody(c, id, hero, col * cell + cell / 2, row * cell * 0.62 + cell * 0.45, col % 2 ? Math.PI - 0.3 : -0.2, time, hero ? [0, 0, 0] : tiers, 0, hero ? col * 3 + 1 : 1, 2.3);
+    }));
+  },
+};

@@ -3,6 +3,7 @@ import { MAPS, PATH_WIDTH, distToPath, type MapDef } from '../core/maps';
 import { TOWER_MAP } from '../core/towers';
 import { HERO_MAP } from '../core/heroes';
 import { WORLD_H, WORLD_W } from '../core/types';
+import { drawSoldierArt, drawTowerArt } from './towerArt';
 
 export interface Overlay {
   ghost?: { defId: string; x: number; y: number; valid: boolean; radius: number; range: number };
@@ -12,6 +13,7 @@ export interface Overlay {
 }
 
 const TAU = Math.PI * 2;
+const MAP_SCALE = 1.4; // on-map size of tower models
 
 function circle(c: CanvasRenderingContext2D, x: number, y: number, r: number, fill: string, stroke?: string, lw = 2) {
   c.beginPath(); c.arc(x, y, r, 0, TAU); c.fillStyle = fill; c.fill();
@@ -150,7 +152,8 @@ export class Renderer {
     for (const e of es) if (!e.def.giant) this.drawEnemy(c, e, time);
 
     // towers
-    for (const t of g.towers) this.drawTower(c, t, time, t === ov.selected);
+    const sorted = g.towers.slice().sort((a, b) => a.y - b.y);
+    for (const t of sorted) this.drawTower(c, t, time, t === ov.selected);
     for (const s of g.soldiers) this.drawSoldier(c, s, time);
 
     // projectiles
@@ -199,7 +202,7 @@ export class Renderer {
       const gh = ov.ghost;
       this.rangeCircle(gh.x, gh.y, gh.range, gh.valid ? 'rgba(255,255,255,0.16)' : 'rgba(255,60,60,0.2)', gh.valid ? 'rgba(255,255,255,0.7)' : 'rgba(255,80,80,0.8)');
       c.globalAlpha = 0.75;
-      this.drawTowerBody(c, gh.defId === 'hero' ? g.heroId : gh.defId, gh.defId === 'hero', gh.x, gh.y, -Math.PI / 2, time, [0, 0, 0], 0);
+      this.drawTowerBody(c, gh.defId === 'hero' ? g.heroId : gh.defId, gh.defId === 'hero', gh.x, gh.y, -0.3, time, [0, 0, 0], 0, 1, MAP_SCALE);
       c.globalAlpha = 1;
     }
     if (ov.targeting && ov.cursor) {
@@ -350,9 +353,9 @@ export class Renderer {
 
   // ------------------------------------------------------------ towers
   drawTower(c: CanvasRenderingContext2D, t: Tower, time: number, selected: boolean) {
-    if (selected) { c.strokeStyle = '#ffe27a'; c.lineWidth = 3; c.beginPath(); c.arc(t.x, t.y, t.radius + 6, 0, TAU); c.stroke(); }
-    if (t.brewBuff) { c.strokeStyle = 'rgba(182,255,90,0.7)'; c.lineWidth = 2; c.beginPath(); c.arc(t.x, t.y, t.radius + 4 + Math.sin(time * 6) * 1.5, 0, TAU); c.stroke(); }
-    this.drawTowerBody(c, t.defId, t.isHero, t.x, t.y, t.angle, time, t.tiers, t.anim, t.level);
+    if (selected) { c.strokeStyle = '#ffe27a'; c.lineWidth = 2.5; c.beginPath(); c.ellipse(t.x, t.y + 6, t.radius + 6, (t.radius + 6) * 0.5, 0, 0, TAU); c.stroke(); }
+    if (t.brewBuff) { c.strokeStyle = 'rgba(182,255,90,0.75)'; c.lineWidth = 2; c.beginPath(); c.ellipse(t.x, t.y + 5, t.radius + 2 + Math.sin(time * 6) * 1.5, (t.radius + 2) * 0.5, 0, 0, TAU); c.stroke(); }
+    this.drawTowerBody(c, t.defId, t.isHero, t.x, t.y, t.angle, time, t.tiers, t.anim, t.level, MAP_SCALE);
     if (!t.isHero) {
       // tier pips
       const total = t.tiers[0] + t.tiers[1] + t.tiers[2];
@@ -360,138 +363,23 @@ export class Renderer {
         const cols = ['#ff6a5a', '#5ab8ff', '#7dff6a'];
         let i = 0;
         const n = t.tiers.filter((x) => x).length;
-        t.tiers.forEach((tier, p) => { if (!tier) return; const px = t.x + (i - (n - 1) / 2) * 12; c.fillStyle = 'rgba(0,0,0,0.6)'; c.fillRect(px - 5, t.y + t.radius - 2, 10, 9); c.fillStyle = cols[p]; c.font = 'bold 9px system-ui'; c.textAlign = 'center'; c.fillText(String(tier), px, t.y + t.radius + 5); i++; });
+        t.tiers.forEach((tier, p) => { if (!tier) return; const px = t.x + (i - (n - 1) / 2) * 12; c.fillStyle = 'rgba(0,0,0,0.6)'; c.fillRect(px - 5, t.y + 15, 10, 9); c.fillStyle = cols[p]; c.font = 'bold 9px system-ui'; c.textAlign = 'center'; c.fillText(String(tier), px, t.y + 22.5); i++; });
       }
     } else {
-      c.fillStyle = 'rgba(0,0,0,0.65)'; this.roundRect(c, t.x - 9, t.y + t.radius - 3, 18, 11, 4); c.fill();
-      c.fillStyle = '#ffe27a'; c.font = 'bold 9px system-ui'; c.textAlign = 'center'; c.fillText(String(t.level), t.x, t.y + t.radius + 5);
+      c.fillStyle = 'rgba(0,0,0,0.65)'; this.roundRect(c, t.x - 11, t.y + 15, 22, 10, 4); c.fill();
+      c.fillStyle = '#ffe27a'; c.font = 'bold 8px system-ui'; c.textAlign = 'center'; c.fillText(`Lv${t.level}`, t.x, t.y + 22.5);
     }
   }
 
-  drawTowerBody(c: CanvasRenderingContext2D, defId: string, isHero: boolean, x: number, y: number, ang: number, time: number, tiers: number[], anim: number, level = 1) {
-    const def = isHero ? HERO_MAP[defId] : TOWER_MAP[defId];
-    if (!def) return;
-    const r = def.radius;
-    const top = Math.max(...tiers);
-    // platform
-    c.fillStyle = 'rgba(0,0,0,0.25)'; c.beginPath(); c.ellipse(x + 2, y + 4, r + 2, r * 0.8, 0, 0, TAU); c.fill();
-    circle(c, x, y, r, top >= 5 ? '#ffe9a8' : top >= 3 ? '#cfc6b8' : '#a99f92', top >= 5 ? '#d4a017' : '#6e665c', 2.5);
-    circle(c, x, y, r * 0.78, shade(def.color, -10));
-    const kick = anim > 0 ? -2 : 0;
-    c.save(); c.translate(x, y);
-    switch (isHero ? 'hero:' + defId : defId) {
-      case 'archer': {
-        c.rotate(ang);
-        circle(c, 0, 0, r * 0.55, def.color, shade(def.color, -50), 1.5);
-        c.strokeStyle = '#6b4a2b'; c.lineWidth = 2.5; c.beginPath(); c.arc(r * 0.35 + kick, 0, r * 0.55, -1.2, 1.2); c.stroke();
-        c.strokeStyle = '#eee'; c.lineWidth = 1; c.beginPath(); c.moveTo(r * 0.35 + kick + Math.cos(-1.2) * r * 0.55, Math.sin(-1.2) * r * 0.55); c.lineTo(r * 0.35 + kick + Math.cos(1.2) * r * 0.55, Math.sin(1.2) * r * 0.55); c.stroke();
-        circle(c, -r * 0.1, 0, r * 0.28, '#f1c27d');
-        if (tiers[2] >= 2) circle(c, r * 0.8, 0, 3, '#ff7a1a');
-        break;
-      }
-      case 'knight': {
-        c.rotate(ang + (anim > 0 ? (0.15 - anim) * 20 : 0));
-        circle(c, 0, 0, r * 0.6, '#c3ccd8', '#6e7888', 2);
-        c.fillStyle = tiers[1] >= 3 ? '#ffe27a' : '#e8eef7'; c.fillRect(r * 0.3, -2, r * 0.9, 4);
-        c.fillStyle = '#8a5a32'; c.fillRect(r * 0.2, -4, 4, 8);
-        c.fillStyle = def.accent; c.beginPath(); c.arc(-r * 0.15, 0, r * 0.25, 0, TAU); c.fill();
-        break;
-      }
-      case 'barracks': {
-        c.fillStyle = '#8a5a3a'; c.fillRect(-r * 0.6, -r * 0.45, r * 1.2, r * 0.9);
-        c.fillStyle = '#c94a3a'; c.beginPath(); c.moveTo(-r * 0.75, -r * 0.4); c.lineTo(0, -r * 0.95); c.lineTo(r * 0.75, -r * 0.4); c.fill();
-        c.fillStyle = '#3a2a1a'; c.fillRect(-r * 0.18, -r * 0.05, r * 0.36, r * 0.5);
-        c.strokeStyle = '#ffe27a'; c.lineWidth = 1.5; c.beginPath(); c.moveTo(r * 0.5, -r * 0.4); c.lineTo(r * 0.5, -r * 1.1); c.stroke();
-        c.fillStyle = '#ffe27a'; c.beginPath(); c.moveTo(r * 0.5, -r * 1.1); c.lineTo(r * 0.85, -r * 0.95 + Math.sin(time * 5) * 2); c.lineTo(r * 0.5, -r * 0.8); c.fill();
-        break;
-      }
-      case 'mage': case 'hero:lyra': {
-        const robe = isHero ? '#6b4fd6' : '#c2412f';
-        circle(c, 0, 0, r * 0.6, robe, shade(robe, -50), 1.5);
-        c.fillStyle = shade(robe, -30); c.beginPath(); c.moveTo(-r * 0.4, -r * 0.1); c.lineTo(0, -r * 0.95); c.lineTo(r * 0.4, -r * 0.1); c.fill();
-        c.rotate(ang);
-        c.strokeStyle = '#7a5230'; c.lineWidth = 2; c.beginPath(); c.moveTo(0, r * 0.3); c.lineTo(r * 0.85, r * 0.3); c.stroke();
-        const glow = isHero ? '#ffe27a' : tiers[1] >= 3 ? '#9fe0ff' : '#ffb02e';
-        circle(c, r * 0.9, r * 0.3, 3.5 + Math.sin(time * 8) * 1, glow);
-        break;
-      }
-      case 'druid': {
-        circle(c, 0, 0, r * 0.6, '#4aa3c7', '#2a6f8a', 1.5);
-        for (let i = 0; i < 6; i++) { const a = (i / 6) * TAU + time * 0.8; c.fillStyle = '#e8fbff'; c.beginPath(); c.moveTo(Math.cos(a) * r * 0.3, Math.sin(a) * r * 0.3); c.lineTo(Math.cos(a) * r * 0.75, Math.sin(a) * r * 0.75); c.lineTo(Math.cos(a + 0.3) * r * 0.35, Math.sin(a + 0.3) * r * 0.35); c.fill(); }
-        circle(c, 0, 0, r * 0.25, tiers[1] ? '#5ab84a' : '#ffffff');
-        break;
-      }
-      case 'cannon': {
-        c.rotate(ang);
-        circle(c, 0, 0, r * 0.62, '#6b6b75', '#3a3a42', 2);
-        const n = tiers[1] >= 2 ? 2 : 1;
-        for (let k = 0; k < n; k++) { const off = n === 2 ? (k ? 4 : -4) : 0; c.fillStyle = '#2a2a2a'; c.fillRect(r * 0.1 + kick, off - 4, r * 0.95, 8); c.fillStyle = '#e0a030'; c.fillRect(r * 0.95 + kick, off - 5, 3, 10); }
-        circle(c, -r * 0.25, 0, r * 0.22, '#d9a066');
-        break;
-      }
-      case 'ballista': {
-        c.rotate(ang);
-        c.fillStyle = '#8a5a32'; c.fillRect(-r * 0.6, -3, r * 1.5 + kick, 6);
-        c.strokeStyle = '#5a3a1a'; c.lineWidth = 3; c.beginPath(); c.arc(r * 0.3, 0, r * 0.7, -1.3, 1.3); c.stroke();
-        c.strokeStyle = '#ddd'; c.lineWidth = 1; c.beginPath(); c.moveTo(r * 0.3 + Math.cos(-1.3) * r * 0.7, Math.sin(-1.3) * r * 0.7); c.lineTo(-r * 0.3 + kick, 0); c.lineTo(r * 0.3 + Math.cos(1.3) * r * 0.7, Math.sin(1.3) * r * 0.7); c.stroke();
-        c.fillStyle = '#d9d9d9'; c.beginPath(); c.moveTo(r * 1 + kick, 0); c.lineTo(r * 0.75 + kick, -3); c.lineTo(r * 0.75 + kick, 3); c.fill();
-        break;
-      }
-      case 'alchemist': {
-        circle(c, 0, 0, r * 0.6, '#3a3a3a', '#1a1a1a', 2);
-        circle(c, 0, 0, r * 0.45, '#5aff3a');
-        for (let i = 0; i < 3; i++) circle(c, Math.sin(time * 3 + i * 2) * r * 0.25, Math.cos(time * 4 + i) * r * 0.2, 2.5, '#d9ffb0');
-        if (tiers[2] >= 1) circle(c, r * 0.6, -r * 0.5, 4, '#ffd23a', '#b8860b', 1);
-        break;
-      }
-      case 'bard': {
-        circle(c, 0, 0, r * 0.55, '#d68a2f', '#8a5a1a', 1.5);
-        c.fillStyle = '#7a3fbf'; c.beginPath(); c.ellipse(r * 0.2, r * 0.15, r * 0.35, r * 0.25, 0.4, 0, TAU); c.fill();
-        c.strokeStyle = '#3a2a1a'; c.lineWidth = 2; c.beginPath(); c.moveTo(r * 0.3, r * 0.1); c.lineTo(-r * 0.4, -r * 0.5); c.stroke();
-        c.fillStyle = '#ffe27a'; c.font = `${r * 0.8}px system-ui`; c.textAlign = 'center'; c.fillText('♪', Math.sin(time * 2) * 6, -r * 0.6 - ((time * 20) % 10));
-        break;
-      }
-      case 'mine': {
-        c.fillStyle = '#5a4030'; c.beginPath(); c.arc(0, r * 0.1, r * 0.6, Math.PI, 0); c.fill();
-        c.fillStyle = '#1a1210'; c.beginPath(); c.arc(0, r * 0.15, r * 0.35, Math.PI, 0); c.fill();
-        c.fillStyle = '#8a6a3a'; c.fillRect(-r * 0.65, r * 0.1, r * 1.3, 4);
-        for (let i = 0; i < 3; i++) circle(c, -r * 0.35 + i * r * 0.35, r * 0.4, 3.5, '#ffd23a', '#b8860b', 1);
-        if (tiers[1]) { c.fillStyle = '#fff'; c.font = `bold ${r * 0.6}px system-ui`; c.textAlign = 'center'; c.fillText('🏦', 0, -r * 0.5); }
-        break;
-      }
-      case 'hero:aldric': {
-        c.rotate(ang + (anim > 0 ? (0.15 - anim) * 20 : 0));
-        c.fillStyle = '#2f6fd6'; c.beginPath(); c.arc(-r * 0.2, 0, r * 0.65, Math.PI * 0.5, Math.PI * 1.5); c.fill();
-        circle(c, 0, 0, r * 0.5, '#d5dde8', '#7a8494', 2);
-        c.fillStyle = '#fff6b0'; c.fillRect(r * 0.3, -2.5, r * 1.0, 5);
-        c.fillStyle = '#c9a35b'; c.fillRect(r * 0.25, -5, 4, 10);
-        c.fillStyle = '#d94040'; c.fillRect(-3, -r * 0.6, 6, 4);
-        break;
-      }
-      case 'hero:grimbeard': {
-        c.rotate(ang);
-        circle(c, 0, 0, r * 0.55, '#a0522d', '#5a2a10', 2);
-        c.fillStyle = '#e07a2a'; c.beginPath(); c.arc(-r * 0.1, 0, r * 0.4, -1, 1); c.fill();
-        c.fillStyle = '#3a3a3a'; c.fillRect(r * 0.2 + kick, -3, r * 0.9, 6);
-        c.fillStyle = '#ffcc33'; c.beginPath(); c.arc(-r * 0.2, 0, r * 0.25, 0, TAU); c.fill();
-        break;
-      }
-    }
-    c.restore();
-    void level;
+  drawTowerBody(c: CanvasRenderingContext2D, defId: string, isHero: boolean, x: number, y: number, ang: number, time: number, tiers: number[], anim: number, level = 1, scale = 1) {
+    drawTowerArt(c, defId, x, y, { aim: ang, anim, time, tiers, level, hero: isHero }, scale);
   }
 
   drawSoldier(c: CanvasRenderingContext2D, s: Soldier, time: number) {
     if (s.dead) return;
-    const x = s.x, y = s.y;
-    c.fillStyle = 'rgba(0,0,0,0.2)'; c.beginPath(); c.ellipse(x + 1, y + 6, 7, 3, 0, 0, TAU); c.fill();
-    circle(c, x, y, 7, '#c94a3a', '#6a1a10', 1.5);
-    circle(c, x, y - 1, 4, '#d5dde8');
-    c.fillStyle = '#8a96a3'; c.fillRect(x - 9, y - 4, 4, 8);
-    const stab = s.anim > 0 ? 3 : 0;
-    c.strokeStyle = '#e8eef7'; c.lineWidth = 1.5; c.beginPath(); c.moveTo(x + 5, y + 2); c.lineTo(x + 11 + stab, y - 6 - stab); c.stroke();
-    if (s.hp < s.maxHp) { c.fillStyle = 'rgba(0,0,0,0.5)'; c.fillRect(x - 8, y - 13, 16, 3); c.fillStyle = '#5aff6a'; c.fillRect(x - 8, y - 13, (16 * s.hp) / s.maxHp, 3); }
-    void time;
+    const facing = s.hx >= s.tower.x ? 1 : -1;
+    drawSoldierArt(c, s.x, s.y, facing, s.anim > 0, time + s.i, s.tower.tiers[1] >= 4);
+    if (s.hp < s.maxHp) { c.fillStyle = 'rgba(0,0,0,0.5)'; c.fillRect(s.x - 8, s.y - 25, 16, 3); c.fillStyle = '#5aff6a'; c.fillRect(s.x - 8, s.y - 25, (16 * s.hp) / s.maxHp, 3); }
   }
 
   drawProjectile(c: CanvasRenderingContext2D, p: Projectile) {
@@ -537,7 +425,7 @@ export class Renderer {
     canvas.width = size * dpr; canvas.height = size * dpr;
     c.setTransform(dpr * (size / 48), 0, 0, dpr * (size / 48), 0, 0);
     c.clearRect(0, 0, 48, 48);
-    this.drawTowerBody(c, defId, isHero, 24, 24, -Math.PI / 4, 0, [0, 0, 0], 0);
+    this.drawTowerBody(c, defId, isHero, 24, 31, -0.2, 0.6, [0, 0, 0], 0, 1, 0.98);
   }
 }
 
