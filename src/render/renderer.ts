@@ -3,7 +3,7 @@ import { MAPS, PATH_WIDTH, distToPath, type MapDef } from '../core/maps';
 import { TOWER_MAP } from '../core/towers';
 import { HERO_MAP } from '../core/heroes';
 import { WORLD_H, WORLD_W } from '../core/types';
-import { drawSoldierArt, drawTowerArt } from './towerArt';
+import { ART_HEIGHT, drawSoldierArt, drawTowerArt } from './towerArt';
 import { drawAmbient, drawSpire, exitPoint, paintMap } from './mapArt';
 
 export interface Overlay {
@@ -14,7 +14,7 @@ export interface Overlay {
 }
 
 const TAU = Math.PI * 2;
-const MAP_SCALE = 1.4; // on-map size of tower models
+const MAP_SCALE = 1.0; // on-map size of tower models
 
 function circle(c: CanvasRenderingContext2D, x: number, y: number, r: number, fill: string, stroke?: string, lw = 2) {
   c.beginPath(); c.arc(x, y, r, 0, TAU); c.fillStyle = fill; c.fill();
@@ -358,7 +358,8 @@ export class Renderer {
     canvas.width = size * dpr; canvas.height = size * dpr;
     c.setTransform(dpr * (size / 48), 0, 0, dpr * (size / 48), 0, 0);
     c.clearRect(0, 0, 48, 48);
-    this.drawTowerBody(c, defId, isHero, 24, 31, -0.2, 0.6, [0, 0, 0], 0, 1, 0.98);
+    const h = ART_HEIGHT[defId] ?? 60, k = Math.min(1.1, 42 / h);
+    this.drawTowerBody(c, defId, isHero, 24, 40 - 6 * k, -0.2, 0.6, [0, 0, 0], 0, 1, k);
   }
 }
 

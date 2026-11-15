@@ -638,13 +638,13 @@ showMenu('main');
     const ids = [...TOWERS.map((t) => t.id), 'aldric', 'lyra', 'grimbeard'];
     const tiersSet = [[0, 0, 0], [3, 2, 0], [0, 2, 5], [2, 0, 5]];
     const cv = document.createElement('canvas');
-    const cell = 150; cv.width = cell * 4; cv.height = cell * ids.length * 0.62;
+    const cell = 150; cv.width = cell * 4; cv.height = cell * ids.length * 0.75;
     cv.style.cssText = 'position:fixed;inset:0;z-index:99;background:#7cc95a';
     document.body.appendChild(cv);
     const c = cv.getContext('2d')!;
     ids.forEach((id, row) => tiersSet.forEach((tiers, col) => {
       const hero = ['aldric', 'lyra', 'grimbeard'].includes(id);
-      renderer.drawTowerBody(c, id, hero, col * cell + cell / 2, row * cell * 0.62 + cell * 0.45, col % 2 ? Math.PI - 0.3 : -0.2, time, hero ? [0, 0, 0] : tiers, 0, hero ? col * 3 + 1 : 1, 2.3);
+      renderer.drawTowerBody(c, id, hero, col * cell + cell / 2, row * cell * 0.75 + cell * 0.66, col % 2 ? Math.PI - 0.3 : -0.2, time, hero ? [0, 0, 0] : tiers, 0, hero ? col * 3 + 1 : 1, 1.1);
     }));
   },
 };
