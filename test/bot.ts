@@ -43,14 +43,14 @@ export function runBot(mapId: string, diff: Difficulty, maxRound = 40, heroId = 
         const cost = g.upgradeCost(t, p);
         if (!bestUp || cost < bestUp.cost) bestUp = { t, p, cost };
       }
-      const wantPlace = !bestUp || placeCost < bestUp.cost * 2 || g.towers.length < 3 + g.round / 3;
+      const wantPlace = !bestUp || placeCost < bestUp.cost * 2 || g.towers.length < (g.round <= 12 ? 4 + g.round / 2 : 3 + g.round / 3);
       if (wantPlace && g.gold >= placeCost) {
         const id = nextType === 'hero' ? 'hero' : nextType;
         if (id === 'hero' && g.heroPlaced) { orderIdx++; continue; }
         const spot = spots.find((s) => g.canPlace(s.x, s.y, 18));
         if (!spot) break;
         const t = g.placeTower(id, spot.x, spot.y);
-        if (t) { orderIdx++; if (t.defId === 'ballista' || t.defId === 'alchemist') t.targeting = 'strong'; continue; }
+        if (t) { if (process.env.DBG) console.log('place', id, spot.x, spot.y, 'r', g.round); orderIdx++; if (t.defId === 'ballista' || t.defId === 'alchemist') t.targeting = 'strong'; continue; }
         break;
       } else if (bestUp && g.gold >= bestUp.cost && !wantPlace) {
         g.upgrade(bestUp.t, bestUp.p); plans.set(bestUp.t.uid, (plans.get(bestUp.t.uid) ?? 0) + 1); continue;

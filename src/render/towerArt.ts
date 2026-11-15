@@ -3,6 +3,7 @@
 // visibly changes with upgrades (trim, glow, path-themed gear).
 type C = CanvasRenderingContext2D;
 const TAU = Math.PI * 2;
+import { BUILDINGS } from './buildings';
 
 export interface Pose { aim: number; anim: number; time: number; tiers: number[]; level: number; hero: boolean }
 
@@ -428,47 +429,38 @@ function aldric(c: C, p: Pose) {
   line(c, 0, -1, 0, -17, 'rgba(110,170,255,0.6)', 0.6);
   c.fillStyle = '#e8c45a'; c.fillRect(-4, -0.6, 8, 1.8); circ(c, 0, 4, 1, '#e8c45a');
   c.restore();
-  if (p.level >= 7) { c.globalAlpha *= 0.35 + Math.sin(p.time * 3) * 0.1; circ(c, 0, -12, 14, '#9cc6ff'); c.globalAlpha = 1; }
+  if (p.level >= 7) { c.strokeStyle = `rgba(156,198,255,${0.5 + Math.sin(p.time * 3) * 0.2})`; c.lineWidth = 1; c.beginPath(); c.ellipse(0, 4, 9, 3, 0, 0, TAU); c.stroke(); }
 }
 
 function lyra(c: C, p: Pose) { mage(c, p, true); }
 function grimbeard(c: C, p: Pose) { cannon(c, p, true); }
 
 // ---------------------------------------------------------------- entry
-const RADIUS: Record<string, number> = { archer: 13, knight: 13, barracks: 16, mage: 13, druid: 13, cannon: 15, ballista: 15, alchemist: 15, bard: 13, mine: 16, aldric: 13, lyra: 13, grimbeard: 13 };
+const FIGURE: Record<string, (c: C, p: Pose) => void> = { archer, knight, mage: (c, p) => mage(c, p), druid, cannon: (c, p) => cannon(c, p), ballista, alchemist, bard, aldric, lyra, grimbeard };
 
 export function drawTowerArt(c: C, id: string, x: number, y: number, pose: Pose, scale = 1) {
+  const b = BUILDINGS[id];
+  if (!b) return;
   c.save();
-  c.translate(x, y + 2);
+  c.translate(x, y + 6);
   c.scale(scale, scale);
-  const top = Math.max(...pose.tiers, pose.hero ? (pose.level >= 10 ? 5 : pose.level >= 6 ? 3 : 0) : 0);
-  const base = id === 'mine' ? ['#9a8a74', '#6a5a48'] : pose.hero ? ['#c9c0e0', '#7d72a0'] : ['#b9b0a3', '#7d7468'];
-  pedestal(c, RADIUS[id] ?? 13, top, pose.time, base[0], base[1]);
-  // face the target
+  b.back(c, pose);
   const f = Math.cos(pose.aim) < -0.05 ? -1 : 1;
-  c.scale(f, 1);
   let aim = f === 1 ? pose.aim : Math.PI - pose.aim;
   if (aim > Math.PI) aim -= TAU;
   if (aim < -Math.PI) aim += TAU;
-  // treat straight up/down as gentle
-  const P = { ...pose, aim };
-  switch (id) {
-    case 'archer': archer(c, P); break;
-    case 'knight': knight(c, P); break;
-    case 'barracks': barracks(c, P); break;
-    case 'mage': mage(c, P); break;
-    case 'druid': druid(c, P); break;
-    case 'cannon': cannon(c, P); break;
-    case 'ballista': ballista(c, P); break;
-    case 'alchemist': alchemist(c, P); break;
-    case 'bard': bard(c, P); break;
-    case 'mine': mine(c, P); break;
-    case 'aldric': aldric(c, P); break;
-    case 'lyra': lyra(c, P); break;
-    case 'grimbeard': grimbeard(c, P); break;
+  const fig = FIGURE[id];
+  if (fig) for (const an of b.figures(pose)) {
+    c.save(); c.translate(an.x, an.y); c.scale(an.s * f, an.s); c.translate(0, -4);
+    fig(c, { ...pose, aim });
+    c.restore();
   }
+  b.front?.(c, pose);
   c.restore();
 }
+
+/** Approximate drawn height (for fitting shop icons). */
+export const ART_HEIGHT: Record<string, number> = { archer: 66, knight: 56, barracks: 62, mage: 98, druid: 60, cannon: 58, ballista: 44, alchemist: 60, bard: 66, mine: 52, aldric: 54, lyra: 60, grimbeard: 48 };
 
 /** Small spearman for Barracks soldiers. */
 export function drawSoldierArt(c: C, x: number, y: number, facing: number, stab: boolean, time: number, gold: boolean) {

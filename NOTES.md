@@ -11,7 +11,15 @@
 - `test/bot.ts` headless balance bot: `npx tsx test/bot.ts <map> <difficulty> 40`
 
 ## Balance baseline (bot, deliberately mediocre)
-- Easy: wins all maps. Medium: wins Meadowbrook, dies to wave-40 dragon elsewhere. Hard: dies ~wave 26-30.
+- Easy: wins all 4 maps. Medium: wins Meadowbrook + Caverns, loses Ember (w30) / Summit (w40). Hard: dies ~w26-30.
+- The bot is very sensitive to which spots are free: keep scenery off prime build land near the road (frame() keeps decor 34px+ off the path).
+
+## Art
+- Maps: src/render/mapArt.ts (noise terrain, textured roads, painted trees/pines/rocks/lava/crystals, cave walls, ambient anim).
+- Towers: src/render/buildings.ts (KR-style structures with back/front layers) + figures in src/render/towerArt.ts.
+- UI: src/style.css (wood/parchment/stone/gilt, all CSS+SVG), src/ui/icons.ts (SVG icon set), fonts bundled via @fontsource.
+- Menu background is a live "attract mode" demo battle.
+- Next art target: enemies (still simple coloured creatures).
 
 ## Deploy
 - GitHub Pages via .github/workflows/pages.yml (needs Settings > Pages > Source = GitHub Actions).

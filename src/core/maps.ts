@@ -1,6 +1,6 @@
 import type { Vec } from './types';
 
-export interface Obstacle { x: number; y: number; r: number; kind: 'tree' | 'rock' | 'crystal' | 'water' | 'lava' | 'pine' }
+export interface Obstacle { x: number; y: number; r: number; kind: 'tree' | 'rock' | 'crystal' | 'water' | 'lava' | 'pine' | 'bush' | 'house' | 'ruin' | 'mushroom' | 'windmill' | 'deadtree' | 'obsidian' | 'stalagmite' }
 
 export interface MapDef {
   id: string;
@@ -28,6 +28,30 @@ function scatter(seed: number, n: number, kind: Obstacle['kind'], rMin: number, 
     if (avoid.some((p) => distToPath(x, y, p) < PATH_WIDTH / 2 + r + 6)) continue;
     if (out.some((o) => Math.hypot(o.x - x, o.y - y) < o.r + r + 4)) continue;
     out.push({ x, y, r, kind });
+  }
+  return out;
+}
+
+/** Scatter that favours the map border, to frame the playfield like painted TD maps. */
+function frame(seed: number, n: number, kinds: Obstacle['kind'][], rMin: number, rMax: number, avoid: Vec[][], taken: Obstacle[]): Obstacle[] {
+  let s = seed;
+  const rnd = () => ((s = (s * 16807) % 2147483647) / 2147483647);
+  const out: Obstacle[] = [];
+  let tries = 0;
+  while (out.length < n && tries < 6000) {
+    tries++;
+    const r = rMin + rnd() * (rMax - rMin);
+    // pick a point near an edge most of the time
+    let x: number, y: number;
+    const e = rnd();
+    if (e < 0.94) {
+      const side = Math.floor(rnd() * 4), t = rnd(), inset = Math.pow(rnd(), 1.6) * 90 - 10;
+      x = side === 0 ? inset : side === 1 ? 960 - inset : t * 960;
+      y = side === 2 ? inset : side === 3 ? 640 - inset : t * 640;
+    } else { x = 30 + rnd() * 900; y = 30 + rnd() * 580; }
+    if (avoid.some((p) => distToPath(x, y, p) < PATH_WIDTH / 2 + r + 34)) continue;
+    if ([...taken, ...out].some((o) => Math.hypot(o.x - x, o.y - y) < (o.r + r) * 0.72)) continue;
+    out.push({ x, y, r, kind: kinds[Math.floor(rnd() * kinds.length)] });
   }
   return out;
 }
@@ -77,25 +101,30 @@ const emberPaths = [
 ];
 const summitPath = [spline([[480, -40], [470, 60], [380, 110], [220, 105], [120, 175], [140, 290], [280, 335], [480, 320], [680, 320], [820, 370], [845, 480], [745, 555], [570, 545], [490, 600], [480, 690]])];
 
+function decorate(seed: number, paths: Vec[][], fixed: Obstacle[], kinds: Obstacle['kind'][], n: number, rMin: number, rMax: number): Obstacle[] {
+  const keep = fixed.filter((o) => !paths.some((p) => distToPath(o.x, o.y, p) < PATH_WIDTH / 2 + o.r + 6));
+  return [...keep, ...frame(seed, n, kinds, rMin, rMax, paths, keep)];
+}
+
 export const MAPS: MapDef[] = [
   {
     id: 'meadow', name: 'Meadowbrook', difficultyLabel: 'Beginner', paths: meadowPath, unlock: null,
-    obstacles: scatter(11, 20, 'tree', 13, 22, meadowPath, [{ x: 540, y: 330, r: 36, kind: 'water' }, { x: 300, y: 440, r: 22, kind: 'water' }]),
+    obstacles: decorate(11, meadowPath, [{ x: 545, y: 330, r: 38, kind: 'water' }, { x: 300, y: 440, r: 24, kind: 'water' }, { x: 900, y: 610, r: 30, kind: 'house' }, { x: 60, y: 30, r: 26, kind: 'windmill' }], ['tree', 'tree', 'tree', 'bush'], 72, 12, 24),
     theme: { ground: '#7cc95a', ground2: '#6bb84c', path: '#e8cf94', pathEdge: '#b89a5e', accent: '#f7f3a1' },
   },
   {
     id: 'caverns', name: 'Crystal Caverns', difficultyLabel: 'Intermediate', paths: cavernPath, unlock: 'meadow',
-    obstacles: scatter(23, 20, 'crystal', 12, 20, cavernPath, [{ x: 470, y: 320, r: 34, kind: 'water' }, { x: 700, y: 330, r: 26, kind: 'water' }]),
+    obstacles: decorate(23, cavernPath, [{ x: 470, y: 320, r: 36, kind: 'water' }, { x: 700, y: 330, r: 28, kind: 'water' }, { x: 255, y: 300, r: 22, kind: 'mushroom' }], ['crystal', 'stalagmite', 'crystal', 'mushroom', 'rock'], 60, 11, 22),
     theme: { ground: '#5b6a8c', ground2: '#506080', path: '#b8a9c9', pathEdge: '#7d6d93', accent: '#9ef0ff' },
   },
   {
     id: 'ember', name: 'Ember Pass', difficultyLabel: 'Advanced', paths: emberPaths, unlock: 'caverns',
-    obstacles: scatter(37, 16, 'rock', 14, 24, emberPaths, [{ x: 450, y: 470, r: 42, kind: 'lava' }, { x: 890, y: 330, r: 34, kind: 'lava' }, { x: 120, y: 330, r: 30, kind: 'lava' }]),
+    obstacles: decorate(37, emberPaths, [{ x: 450, y: 470, r: 44, kind: 'lava' }, { x: 890, y: 330, r: 34, kind: 'lava' }, { x: 110, y: 330, r: 30, kind: 'lava' }], ['rock', 'deadtree', 'obsidian', 'deadtree', 'ruin'], 52, 12, 24),
     theme: { ground: '#a8794f', ground2: '#9a6c45', path: '#5b4636', pathEdge: '#3b2c22', accent: '#ffb347' },
   },
   {
     id: 'summit', name: 'Spire Summit', difficultyLabel: 'Expert', paths: summitPath, unlock: 'ember',
-    obstacles: scatter(51, 24, 'pine', 13, 22, summitPath, [{ x: 330, y: 215, r: 44, kind: 'rock' }, { x: 640, y: 440, r: 44, kind: 'rock' }, { x: 900, y: 120, r: 36, kind: 'rock' }]),
+    obstacles: decorate(51, summitPath, [{ x: 330, y: 215, r: 44, kind: 'rock' }, { x: 640, y: 440, r: 44, kind: 'rock' }, { x: 900, y: 120, r: 36, kind: 'water' }], ['pine', 'pine', 'pine', 'rock'], 72, 12, 22),
     theme: { ground: '#d8e6ef', ground2: '#c8d9e5', path: '#8d9aa8', pathEdge: '#5f6b78', accent: '#ffffff' },
   },
 ];
