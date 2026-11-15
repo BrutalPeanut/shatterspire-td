@@ -1,0 +1,52 @@
+import { MAPS } from './core/maps';
+import { TOWERS } from './core/towers';
+import { HEROES } from './core/heroes';
+import { perkPoints } from './core/progress';
+import type { Difficulty } from './core/types';
+import type { Game } from './core/game';
+
+export interface Profile {
+  v: 1;
+  totalRounds: number;
+  medals: Record<string, Partial<Record<Difficulty | 'freeplay', number>>>; // value = 1 for medal, freeplay = best round
+  perks: string[];
+  powers: Record<string, number>;
+  settings: { sfx: boolean; music: boolean; autoStart: boolean };
+  lastHero: string;
+}
+
+const KEY = 'shatterspire.profile.v1';
+const RUN = 'shatterspire.run.v1';
+export const UNLOCK_ALL = typeof location !== 'undefined' && /[?&]unlockall\b/.test(location.search);
+
+function safeGet(k: string): string | null { try { return localStorage.getItem(k); } catch { return null; } }
+function safeSet(k: string, v: string) { try { localStorage.setItem(k, v); } catch { /* storage unavailable */ } }
+function safeDel(k: string) { try { localStorage.removeItem(k); } catch { /* ignore */ } }
+
+export function loadProfile(): Profile {
+  const def: Profile = { v: 1, totalRounds: 0, medals: {}, perks: [], powers: { chest: 1, draught: 1 }, settings: { sfx: true, music: true, autoStart: false }, lastHero: 'aldric' };
+  const raw = safeGet(KEY);
+  if (!raw) return def;
+  try { const p = JSON.parse(raw); return { ...def, ...p, settings: { ...def.settings, ...p.settings }, powers: { ...p.powers } }; } catch { return def; }
+}
+export function saveProfile(p: Profile) { safeSet(KEY, JSON.stringify(p)); }
+
+export function medalCount(p: Profile) {
+  let n = 0;
+  for (const m of Object.values(p.medals)) for (const d of ['easy', 'medium', 'hard'] as const) if (m[d]) n++;
+  return n;
+}
+export function perkPointsLeft(p: Profile) { return (UNLOCK_ALL ? 99 : perkPoints(medalCount(p), p.totalRounds)) - p.perks.length; }
+
+export function towerUnlocked(p: Profile, id: string) { const t = TOWERS.find((x) => x.id === id)!; return UNLOCK_ALL || p.totalRounds >= t.unlockRounds; }
+export function heroUnlocked(p: Profile, id: string) { const h = HEROES.find((x) => x.id === id)!; return UNLOCK_ALL || p.totalRounds >= h.unlockRounds; }
+export function mapUnlocked(p: Profile, id: string) {
+  const m = MAPS.find((x) => x.id === id)!;
+  if (UNLOCK_ALL || !m.unlock) return true;
+  const req = p.medals[m.unlock];
+  return !!(req && (req.easy || req.medium || req.hard));
+}
+
+export function saveRun(g: Game) { safeSet(RUN, JSON.stringify(g.serialize())); }
+export function loadRun(): ReturnType<Game['serialize']> | null { const r = safeGet(RUN); if (!r) return null; try { return JSON.parse(r); } catch { return null; } }
+export function clearRun() { safeDel(RUN); }
