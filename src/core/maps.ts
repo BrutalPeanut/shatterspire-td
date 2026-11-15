@@ -44,12 +44,12 @@ function frame(seed: number, n: number, kinds: Obstacle['kind'][], rMin: number,
     // pick a point near an edge most of the time
     let x: number, y: number;
     const e = rnd();
-    if (e < 0.85) {
+    if (e < 0.94) {
       const side = Math.floor(rnd() * 4), t = rnd(), inset = Math.pow(rnd(), 1.6) * 90 - 10;
       x = side === 0 ? inset : side === 1 ? 960 - inset : t * 960;
       y = side === 2 ? inset : side === 3 ? 640 - inset : t * 640;
     } else { x = 30 + rnd() * 900; y = 30 + rnd() * 580; }
-    if (avoid.some((p) => distToPath(x, y, p) < PATH_WIDTH / 2 + r + 8)) continue;
+    if (avoid.some((p) => distToPath(x, y, p) < PATH_WIDTH / 2 + r + 34)) continue;
     if ([...taken, ...out].some((o) => Math.hypot(o.x - x, o.y - y) < (o.r + r) * 0.72)) continue;
     out.push({ x, y, r, kind: kinds[Math.floor(rnd() * kinds.length)] });
   }
@@ -119,7 +119,7 @@ export const MAPS: MapDef[] = [
   },
   {
     id: 'ember', name: 'Ember Pass', difficultyLabel: 'Advanced', paths: emberPaths, unlock: 'caverns',
-    obstacles: decorate(37, emberPaths, [{ x: 450, y: 470, r: 44, kind: 'lava' }, { x: 890, y: 330, r: 34, kind: 'lava' }, { x: 110, y: 330, r: 30, kind: 'lava' }, { x: 640, y: 250, r: 22, kind: 'ruin' }], ['rock', 'deadtree', 'obsidian', 'deadtree', 'ruin'], 52, 12, 24),
+    obstacles: decorate(37, emberPaths, [{ x: 450, y: 470, r: 44, kind: 'lava' }, { x: 890, y: 330, r: 34, kind: 'lava' }, { x: 110, y: 330, r: 30, kind: 'lava' }], ['rock', 'deadtree', 'obsidian', 'deadtree', 'ruin'], 52, 12, 24),
     theme: { ground: '#a8794f', ground2: '#9a6c45', path: '#5b4636', pathEdge: '#3b2c22', accent: '#ffb347' },
   },
   {
