@@ -12,6 +12,11 @@
    - Check that the enemy models read clearly on a phone at 3x speed, especially when bosses are crowded.
    - Check the music volume balance versus SFX on mobile speakers.
 
+### Working alongside ChatGPT (from 2026-11-15)
+- Brian is having ChatGPT review these changes, and it has push access to this repo. Start each session by pulling every branch and reading its commits and PRs (`git fetch --all`, `git log --all --oneline -20`) before touching anything.
+- If Claude and ChatGPT disagree (design, balance, code approach, reverting each other's work), do NOT override ChatGPT's work. Lay out both positions for Brian and let him decide.
+- Run the full test checklist below on any ChatGPT changes before merging them.
+
 ### Session checklist (every change)
 - Branch, then run `npx tsc --noEmit` and `npx vite build`, plus `npx vite build --mode single` for the artifact.
 - Run the bot matrix (`npx tsx test/bot.ts <map> <diff> 40`) across 4 maps x easy/medium. It must match the baseline below.
