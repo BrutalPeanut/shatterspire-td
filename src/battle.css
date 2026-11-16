@@ -1,0 +1,175 @@
+/* ===================================================================
+   Battle screen, modelled on Bloons TD 6:
+   - the map fills the screen; lives, gold and round float over its top edge
+   - a slim wooden tower panel on the right: two columns of icon + price tiles
+   - round Play / Speed / Auto buttons at the bottom of the panel
+   - tapping a tower opens an upgrade panel on the side away from it
+   Uses its own ids/classes (#stage, #rail, #tiles, #slot, #ctrl, #tpanel, .tile, .tq-*, .ug)
+   so none of the older battle CSS in style.css applies.
+   =================================================================== */
+#game.on {
+  display: grid; height: 100%; background: #1a1008;
+  grid-template-columns: minmax(0, 1fr) var(--rail); grid-template-rows: minmax(0, 1fr) auto;
+  grid-template-areas: "stage rail" "stage ctrl";
+  --rail: 200px; --th: 92px; --wood: linear-gradient(90deg, #7d4f25, #a26c38 45%, #8a5a2c);
+  --ol: #2a1608; --f: 'Lilita One', 'Nunito', sans-serif;
+}
+#stage { grid-area: stage; position: relative; display: grid; place-items: center; min-width: 0; min-height: 0; overflow: hidden; background: #140c06; }
+#stage #canvas { display: block; border-radius: 0; box-shadow: none; touch-action: none; }
+
+/* ---- HUD over the top of the map */
+#hud { position: absolute; top: 6px; left: 10px; right: 10px; z-index: 3; display: flex; align-items: center; gap: 16px; pointer-events: none; }
+#hud .sp { flex: 1; }
+.hs { display: inline-flex; align-items: center; gap: 5px; font: 400 26px/1 var(--f); color: #fff; -webkit-text-stroke: 5px var(--ol); paint-order: stroke fill; text-shadow: 0 3px 0 rgba(0, 0, 0, 0.45); }
+.hs .ico { width: 28px; height: 28px; filter: drop-shadow(0 2px 0 rgba(0, 0, 0, 0.55)); }
+.hs.gold { color: #ffe27a; }
+.hs.round small { font-size: 15px; margin-right: 2px; color: #ffe7b8; }
+.cb { flex: none; border-radius: 50%; display: inline-flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; padding: 0; color: #fff; font: 400 10.5px/1 var(--f); text-shadow: 0 1px 0 rgba(0, 0, 0, 0.7);
+  box-shadow: inset 0 0 0 2.5px var(--ol), inset 0 5px 0 rgba(255, 255, 255, 0.32), 0 3px 0 var(--ol); transition: transform .06s; }
+.cb:active { transform: translateY(2px); }
+.cb .ico { width: 20px; height: 20px; }
+.cb .cl { white-space: nowrap; } .cb .cl b { font-weight: 400; }
+#pauseBtn { pointer-events: auto; width: 42px; height: 42px; background: linear-gradient(#b98a52, #7d4f25); }
+
+/* ---- tower panel (right rail) */
+#rail { grid-area: rail; display: flex; flex-direction: column; gap: 6px; min-height: 0; padding: 7px 7px 4px 9px; background: var(--wood); box-shadow: inset 3px 0 0 var(--ol), inset 6px 0 0 rgba(255, 220, 160, 0.22); }
+#tiles { flex: 1; min-height: 0; overflow-y: auto; display: grid; grid-template-columns: 1fr 1fr; grid-auto-rows: var(--th); gap: 7px; align-content: start; padding: 2px 2px 6px; scrollbar-width: none; }
+#tiles::-webkit-scrollbar { display: none; }
+.tile { position: relative; min-width: 0; padding: 0; border-radius: 13px; overflow: hidden; cursor: grab; touch-action: pan-y; user-select: none; -webkit-user-select: none;
+  display: flex; align-items: flex-end;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--gc) 62%, #fff), var(--gc) 55%, color-mix(in srgb, var(--gc) 72%, #000));
+  box-shadow: inset 0 0 0 2.5px var(--ol), inset 0 5px 0 rgba(255, 255, 255, 0.3), 0 3px 0 var(--ol); }
+.tile img { position: absolute; left: 12%; top: 3%; width: 76%; height: auto; pointer-events: none; filter: drop-shadow(0 3px 2px rgba(0, 0, 0, 0.4)); }
+.tc { position: relative; width: 100%; display: flex; align-items: center; justify-content: center; gap: 3px; padding: 2px 0 4px; background: rgba(26, 12, 4, 0.8); color: #fff; font: 400 15px/1 var(--f); }
+.tc .ico { width: 13px; height: 13px; }
+.tile.poor .tc { color: #ff8576; } .tile.poor img { filter: grayscale(0.75) brightness(0.72); }
+.tile.sel { box-shadow: inset 0 0 0 2.5px var(--ol), 0 0 0 3px #ffe27a, 0 0 14px 4px rgba(255, 226, 122, 0.85); }
+.tile.locked { cursor: pointer; filter: grayscale(1) brightness(0.8); }
+.tile.deployed .tc { color: #baffa2; font-size: 11.5px; padding: 3px 0 5px; }
+.tile.rec::after { content: '★'; position: absolute; top: 3px; right: 3px; width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; font-size: 12px; line-height: 1; color: #4a2408; background: #ffd75a; box-shadow: 0 0 0 2px var(--ol), 0 0 8px rgba(255, 226, 122, 0.9); }
+.tile.tut-pulse { animation: tilePulse 1s infinite; }
+@keyframes tilePulse { 50% { box-shadow: inset 0 0 0 2.5px var(--ol), 0 0 0 4px #ffe27a, 0 0 20px 8px rgba(255, 226, 122, 0.95); } }
+body.dragging .tile { cursor: grabbing; }
+
+/* ---- info slot at the top of the rail: next wave / what you're placing / what you're hovering */
+#slot { flex: none; height: 84px; }
+#slot.shake { animation: livesHit .4s; }
+.sl { display: flex; flex-direction: column; justify-content: center; gap: 2px; width: 100%; height: 100%; padding: 5px 8px; border-radius: 11px; overflow: hidden; text-align: left; color: #fff; background: rgba(26, 12, 4, 0.74); box-shadow: inset 0 0 0 2px var(--ol); font: 800 11.5px/1.2 'Nunito', sans-serif; }
+.sl b { font: 400 14.5px/1.15 var(--f); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sl b .ico { width: 13px; height: 13px; vertical-align: -1px; }
+.sl-u { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #f3e2c2; }
+.sl-g { color: color-mix(in srgb, var(--gc) 55%, #fff); }
+.sl-l { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; color: #f3e2c2; }
+.sl-c { display: flex; gap: 3px; height: 17px; overflow: hidden; flex-wrap: wrap; } .sl-c .chip { font-size: 9px; padding: 1px 5px; }
+.sl.bad { background: rgba(150, 28, 20, 0.92); }
+.sl-b { display: flex; gap: 5px; margin-top: 2px; }
+.sl-b button { display: inline-flex; align-items: center; justify-content: center; gap: 3px; height: 24px; padding: 0 8px; border-radius: 8px; color: #fff; font: 400 12px/1 var(--f); background: #2f6fd6; box-shadow: inset 0 0 0 2px var(--ol); }
+.sl-b button.x { flex: 1; background: #c8382c; } .sl-b .ico { width: 12px; height: 12px; }
+#rail #coach .cc { flex-direction: column; align-items: stretch; text-align: left; padding: 6px 8px; gap: 4px; }
+#rail #coach .cc { position: relative; } #rail #coach .cc-t b { padding-right: 30px; }
+#rail #coach .cc-n { position: absolute; top: 5px; right: 6px; width: auto; height: auto; padding: 1px 6px; border-radius: 8px; font-size: 10px; box-shadow: none; } #rail #coach .cc-b { flex-direction: row; }
+#rail.coach-hide #coach { display: none; }
+#stage.coach-hide #toast { display: none; }
+#stage #toast { top: 52px; }
+
+/* ---- round controls under the tower panel */
+#ctrl { grid-area: ctrl; display: flex; align-items: center; justify-content: space-between; gap: 4px; padding: 5px 8px 8px 10px; background: var(--wood); box-shadow: inset 3px 0 0 var(--ol), inset 6px 0 0 rgba(255, 220, 160, 0.22), inset 0 3px 0 rgba(0, 0, 0, 0.25); }
+#ctrl #autoBtn, #ctrl #speedBtn { width: 50px; height: 50px; min-width: 0; max-width: none; background: linear-gradient(#8a8f9a, #575c66); }
+#ctrl #autoBtn.on, #ctrl #speedBtn.on { background: linear-gradient(#5aa6ff, #2a5fc8); }
+#ctrl #startBtn { width: 74px; height: 74px; min-width: 0; max-width: none; font-size: 12px; background: linear-gradient(#8bea62, #2f9a22); }
+#ctrl #startBtn .ico { width: 30px; height: 30px; }
+#ctrl #startBtn.running { background: linear-gradient(#b98a52, #7d4f25); }
+#ctrl #startBtn.pulse, #ctrl #startBtn.tut-pulse { animation: playPulse 1s infinite; }
+@keyframes playPulse { 50% { box-shadow: inset 0 0 0 2.5px var(--ol), inset 0 5px 0 rgba(255, 255, 255, 0.32), 0 3px 0 var(--ol), 0 0 0 5px rgba(255, 226, 122, 0.9), 0 0 22px 8px rgba(255, 226, 122, 0.8); } }
+
+/* ---- abilities: bottom-left of the map */
+#stage #abil { left: 8px; bottom: 6px; }
+
+/* ---- upgrade panel */
+/* starts below the HUD row so lives, gold, round and Pause stay visible and reachable */
+#tpanel { grid-area: stage; z-index: 6; display: none; justify-self: end; align-self: stretch; margin-top: 54px; border-radius: 14px 0 0 0; width: 292px; min-height: 0; overflow-y: auto; padding: 9px; background: var(--wood); box-shadow: inset 0 0 0 3px var(--ol), 0 0 24px rgba(0, 0, 0, 0.55); scrollbar-width: none; }
+#tpanel.on { display: flex; flex-direction: column; gap: 7px; }
+#tpanel.L { justify-self: start; border-radius: 0 14px 0 0; }
+.tq-head { display: flex; align-items: center; gap: 8px; color: #fff; }
+.tq-head img { width: 54px; height: 54px; flex: none; border-radius: 11px; background: rgba(26, 12, 4, 0.55); box-shadow: inset 0 0 0 2px var(--ol); }
+.tq-id { flex: 1; min-width: 0; }
+.tq-name { font: 400 19px/1.05 var(--f); -webkit-text-stroke: 4px var(--ol); paint-order: stroke fill; }
+.tq-sub { margin-top: 3px; font: 800 11px/1.2 'Nunito', sans-serif; color: #ffe7a8; }
+.tq-ib { flex: none; width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; box-shadow: inset 0 0 0 2.5px var(--ol), inset 0 4px 0 rgba(255, 255, 255, 0.3), 0 2px 0 var(--ol); }
+.tq-ib .ico { width: 16px; height: 16px; } .tq-info { background: #2f6fd6; } .tq-x { background: #d2402f; }
+.tq-target { display: flex; align-items: center; gap: 6px; padding: 3px; border-radius: 11px; background: rgba(26, 12, 4, 0.6); color: #fff; font: 400 15px/1 var(--f); }
+.tq-target span { flex: 1; text-align: center; } .tq-target b { font-weight: 400; color: #ffe27a; }
+.tq-target button { width: 38px; height: 32px; border-radius: 9px; color: #fff; font-size: 13px; background: linear-gradient(#b98a52, #7d4f25); box-shadow: inset 0 0 0 2px var(--ol); }
+.tq-path { display: grid; grid-template-columns: 38% minmax(0, 1fr); gap: 6px; }
+.tq-path.p0 { --pc: #f0624a; } .tq-path.p1 { --pc: #55a2ff; } .tq-path.p2 { --pc: #5fd04a; }
+.tq-own { display: flex; flex-direction: column; justify-content: center; gap: 3px; min-width: 0; padding: 5px 7px; border-radius: 11px; color: #fff; background: rgba(26, 12, 4, 0.62); box-shadow: inset 0 0 0 2px var(--pc); }
+.tq-own small { font: 800 9.5px/1 'Nunito', sans-serif; letter-spacing: 0.05em; text-transform: uppercase; color: var(--pc); }
+.tq-own b { font: 400 12.5px/1.1 var(--f); }
+.tq-own .pips { display: flex; gap: 3px; margin: 0; } .tq-own .pip { width: 9px; height: 9px; border-radius: 50%; background: #1a0c04; box-shadow: inset 0 0 0 1.5px #000; border: 0; } .tq-own .pip.on { background: var(--pc); }
+.ug { display: flex; flex-direction: column; justify-content: center; gap: 2px; min-width: 0; min-height: 62px; padding: 6px 8px; border-radius: 11px; text-align: left; color: #fff; background: linear-gradient(#7fdc58, #2f8f20); box-shadow: inset 0 0 0 2.5px var(--ol), inset 0 5px 0 rgba(255, 255, 255, 0.28), 0 3px 0 var(--ol); }
+button.ug:active { transform: translateY(2px); }
+.ug b { font: 400 14.5px/1.1 var(--f); text-shadow: 0 1px 0 rgba(0, 0, 0, 0.55); } .ug b .ico { width: 12px; height: 12px; }
+.ug .udl { display: block; margin: 0; font: 800 10.5px/1.2 'Nunito', sans-serif; color: #efffe0; text-shadow: none; }
+.ug .uc { display: inline-flex; align-items: center; gap: 3px; font: 400 15px/1 var(--f); color: #fff6c0; text-shadow: 0 1px 0 rgba(0, 0, 0, 0.6); } .ug .uc .ico { width: 13px; height: 13px; }
+.ug.poor { background: linear-gradient(#e27565, #a32d22); } .ug.poor .udl { color: #ffe6e0; }
+.ug.closed, .ug.max { background: #5c4735; color: #dccbb2; box-shadow: inset 0 0 0 2.5px var(--ol); } .ug.closed .udl { color: #dccbb2; }
+.tq-note { font: 800 11.5px/1.2 'Nunito', sans-serif; color: #ffe7a8; text-align: center; }
+.tq-ab { display: grid; grid-template-columns: 1fr auto; gap: 1px 6px; padding: 6px 8px; border-radius: 11px; color: #fff; background: rgba(26, 12, 4, 0.62); box-shadow: inset 0 0 0 2px #6b4a2a; font: 800 11px/1.25 'Nunito', sans-serif; }
+.tq-ab.has { box-shadow: inset 0 0 0 2px #5fd04a; } .tq-ab b { font: 400 14px/1.1 var(--f); } .tq-ab small { color: #ffe7a8; } .tq-ab span { grid-column: 1 / -1; color: #f3e2c2; }
+#tpanel .xpbar { margin: 0; }
+.tq-foot { display: flex; gap: 6px; margin-top: auto; padding-top: 2px; }
+.tq-btn { flex: 1; min-width: 0; display: inline-flex; align-items: center; justify-content: center; gap: 4px; padding: 10px 6px; border-radius: 11px; color: #fff; font: 400 15px/1 var(--f); text-shadow: 0 1px 0 rgba(0, 0, 0, 0.6); box-shadow: inset 0 0 0 2.5px var(--ol), inset 0 5px 0 rgba(255, 255, 255, 0.28), 0 3px 0 var(--ol); }
+.tq-btn .ico { width: 13px; height: 13px; }
+.tq-btn.sell { background: linear-gradient(#ec5b4a, #a82a1e); } .tq-btn.blue { background: linear-gradient(#5aa6ff, #2a5fc8); } .tq-btn.gold { background: linear-gradient(#ffd75a, #c88a1a); color: #3a1a04; text-shadow: none; }
+
+/* ---- big screens */
+@media (orientation: landscape) and (min-width: 1100px) and (min-height: 620px) {
+  #game.on { --rail: 226px; --th: 104px; }
+  .hs { font-size: 30px; } .hs .ico { width: 32px; height: 32px; }
+  .tc { font-size: 17px; } #slot { height: 92px; }
+  #tpanel { width: 320px; }
+  #ctrl #autoBtn, #ctrl #speedBtn { width: 56px; height: 56px; } #ctrl #startBtn { width: 84px; height: 84px; }
+}
+/* ---- phones held sideways */
+@media (orientation: landscape) and (max-height: 460px) {
+  #game.on { --rail: 150px; --th: 68px; }
+  #hud { top: 3px; left: 8px; right: 6px; gap: 12px; }
+  .hs { font-size: 20px; -webkit-text-stroke-width: 4px; } .hs .ico { width: 21px; height: 21px; } .hs.round small { font-size: 12px; }
+  #pauseBtn { width: 38px; height: 38px; }
+  #rail { padding: 4px 5px 2px 7px; gap: 4px; }
+  #tiles { gap: 5px; } .tile { border-radius: 11px; } .tc { font-size: 13px; padding: 1px 0 3px; }
+  #slot { height: 60px; } .sl { padding: 3px 6px; gap: 1px; font-size: 10.5px; } .sl b { font-size: 12.5px; }
+  .sl-place .sl-l, .sl-info .sl-g { display: none; } .sl-b button { height: 21px; font-size: 11px; padding: 0 6px; }
+  #rail #coach .cc { padding: 4px 6px; gap: 2px; } #rail #coach .cc-t span { font-size: 10px; line-height: 1.15; } #rail #coach .cc-t b { font-size: 11px; }
+  #rail #coach .cc-b button { padding: 2px 8px; font-size: 10.5px; } #rail #coach .cc-n { font-size: 9px; top: 4px; right: 5px; }
+  #ctrl { padding: 3px 5px 5px 7px; gap: 2px; }
+  #ctrl #autoBtn, #ctrl #speedBtn { width: 40px; height: 40px; font-size: 9px; } #ctrl .cb .ico { width: 15px; height: 15px; }
+  #ctrl #startBtn { width: 54px; height: 54px; font-size: 10px; } #ctrl #startBtn .ico { width: 22px; height: 22px; }
+  #stage #abil { transform: scale(0.8); transform-origin: left bottom; left: 5px; bottom: 3px; }
+  #tpanel { width: 258px; padding: 6px; gap: 4px; margin-top: 44px; }
+  .tq-head img { width: 40px; height: 40px; } .tq-name { font-size: 16px; } .tq-ib { width: 32px; height: 32px; }
+  .tq-target button { height: 26px; } .ug { min-height: 50px; padding: 3px 7px; } .ug b { font-size: 13px; } .tq-btn { padding: 8px 6px; }
+}
+/* ---- phones held upright: map on top, towers underneath */
+@media (orientation: portrait) {
+  #game.on { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); grid-template-areas: "stage" "rail"; --th: calc((100vw - 46px) / 6 * 1.12); }
+  #stage { height: calc(66.67vw + 112px); padding: 40px 0 72px; }
+  #hud { top: 4px; left: 8px; right: 6px; gap: 12px; }
+  .hs { font-size: 22px; -webkit-text-stroke-width: 4px; } .hs .ico { width: 23px; height: 23px; } .hs.round small { font-size: 13px; }
+  #pauseBtn { width: 34px; height: 34px; }
+  #stage #abil { left: 6px; bottom: 3px; right: 176px; max-width: none; flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden; zoom: 0.78; scrollbar-width: none; }
+  #ctrl { grid-area: stage; z-index: 4; align-self: end; justify-self: end; padding: 0 6px 7px; gap: 6px; background: none; box-shadow: none; }
+  #ctrl #autoBtn, #ctrl #speedBtn { width: 44px; height: 44px; } #ctrl #startBtn { width: 58px; height: 58px; font-size: 10.5px; } #ctrl #startBtn .ico { width: 24px; height: 24px; }
+  #rail { padding: 8px 8px calc(8px + env(safe-area-inset-bottom)); box-shadow: inset 0 3px 0 var(--ol), inset 0 6px 0 rgba(255, 220, 160, 0.22); background: linear-gradient(180deg, #a26c38, #7d4f25); }
+  #tiles { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; } .tile { touch-action: none; border-radius: 11px; } .tc { font-size: 13px; }
+  #slot { height: 66px; }
+  #tpanel { grid-area: rail; justify-self: stretch; width: auto; margin-top: 0; border-radius: 0; box-shadow: inset 0 3px 0 var(--ol); background: linear-gradient(180deg, #a26c38, #7d4f25); padding: 8px 8px calc(8px + env(safe-area-inset-bottom)); }
+  #tpanel.L { justify-self: stretch; }
+  .tq-path { grid-template-columns: 34% minmax(0, 1fr); }
+}
+@media (orientation: portrait) and (min-height: 780px) {
+  #game.on { --th: calc((100vw - 40px) / 4 * 0.98); }
+  #tiles { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; } .tile { border-radius: 13px; } .tc { font-size: 16px; padding: 3px 0 5px; } .tc .ico { width: 15px; height: 15px; }
+  .tile img { width: 66%; left: 17%; }
+}
+#stage #abil { padding-top: 6px; }
