@@ -41,6 +41,12 @@
 - The Armory is a grid with `grid-auto-flow: dense`. Each colored group box spans as many columns as it has towers (6 columns on portrait, 4 on landscape phones, 3 elsewhere).
 - Group headers and the "Tower guide" button open the guide modal. The info sheet and hover tip show the group too, and How to Play lists the groups.
 
+### Rule: nothing floats over the map (2026-11-15, Brian)
+- Brian: tooltips must never cover the map. The `#hudbar` overlay and the floating `#tip` are gone. Placement, aiming and rally instructions, plus desktop hover info, now render into the side panel's fixed-height info slot (`#wavebox.slot`), replacing the Next Wave box while active.
+- Toasts are hidden while placing. Placement errors shake the slot instead of toasting.
+- An invalid drag-drop keeps the tower in hand (tap mode) so the reason stays visible.
+- A UI test samples points across the canvas mid-drag and fails if anything but the canvas is on top.
+
 ### Tests
 - `npx tsx test/unit.ts`: timing, reinforce cap, placement reasons, hero unlock levels, save compatibility, deploy preview, wave preview, powers (155 checks).
 - `python3 test/ui_test.py` against `npx vite preview --port 4173` runs real Chrome:

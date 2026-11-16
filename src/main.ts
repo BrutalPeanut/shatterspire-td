@@ -39,7 +39,7 @@ document.getElementById('app')!.innerHTML = `
     <button class="tbtn btn3d greenb" id="startBtn"></button>
   </div>
   <div id="main">
-    <div id="field"><canvas id="canvas"></canvas><div id="hudbar"></div><div id="coach"></div><div id="abil"></div><div id="toast"></div></div>
+    <div id="field"><canvas id="canvas"></canvas><div id="coach"></div><div id="abil"></div><div id="toast"></div></div>
     <div id="side"><div id="wavebox"></div><div id="sbody"></div></div>
   </div>
 </div>
@@ -121,10 +121,10 @@ function updateGhost(p: { x: number; y: number }) { if (game && placing) ghost =
 function tryPlace(keep = false): boolean {
   if (!game || !placing || !ghost) return false;
   const err = game.placeError(placing, ghost.x, ghost.y);
-  if (err) { audio.play('error'); toast(err, 'bad'); return false; }
+  if (err) { audio.play('error'); flashSlot(); return false; }
   const id = placing;
   const t = game.placeTower(id, ghost.x, ghost.y);
-  if (!t) { audio.play('error'); toast('Can\'t build here', 'bad'); return false; }
+  if (!t) { audio.play('error'); flashSlot(); return false; }
   audio.play('place');
   tut('placed');
   // keep building copies when Shift is held (desktop) — never for the one-off hero
@@ -164,8 +164,9 @@ window.addEventListener('pointerup', (ev) => {
   const moved = Math.hypot(ev.clientX - d.x, ev.clientY - d.y) > 8;
   if (!d.active && !moved) { beginPlacing(d.id); return; } // simple tap: tap-to-place mode
   if (!d.active) activateDrag();
-  if (overCanvas(ev)) { updateGhost(toWorld(ev, true)); tryPlace(ev.shiftKey); if (!ev.shiftKey && placing) cancelPlacing(); }
-  else { cancelPlacing(); toast('Build cancelled'); }
+  // an invalid drop keeps the tower in hand (tap mode) so the reason stays visible and you can tap a better spot
+  if (overCanvas(ev)) { updateGhost(toWorld(ev, true)); tryPlace(ev.shiftKey); }
+  else cancelPlacing();
 });
 window.addEventListener('pointercancel', (ev) => {
   if (!drag || ev.pointerId !== drag.pid) return;
@@ -237,7 +238,6 @@ function beginPlacing(id: string) {
   select(null); cancelSpells();
   placing = id; ghost = undefined;
   audio.play('click');
-  if (game.gold < game.towerCost(id)) toast(`Not enough gold (need ${fmt(game.towerCost(id) - game.gold)} more)`, 'bad');
 }
 function cancelPlacing() { placing = null; ghost = undefined; }
 function cancelSpells() { armedSpell = null; rallyEdit = null; }
@@ -303,7 +303,7 @@ const waveBox = $('#wavebox');
 let waveKey = '';
 let waveInfoCache: WaveInfo | null = null;
 function renderWaveBox() {
-  if (!game) return;
+  if (!game || waveBox.classList.contains('slot')) return;
   const g = game;
   const building = g.state === 'build';
   const r = building ? g.round + 1 : g.round;
@@ -540,28 +540,25 @@ function towerInfoModal(defId: string, isHero: boolean, lockNote?: string) {
     <div class="ti">${infoBody(defId, isHero, false)}</div>
     <button class="mbtn btn3d gilt" data-m="resume">Got it</button>`);
 }
-const tip = document.createElement('div'); tip.id = 'tip'; document.body.appendChild(tip);
-let tipFor = '';
-function hideTip() { tip.classList.remove('on'); tipFor = ''; }
-document.addEventListener('pointerover', (ev) => {
-  if (ev.pointerType !== 'mouse' || drag) return;
+/** Card under the mouse (desktop); its summary shows in the side panel's info slot. */
+let hoverId: string | null = null;
+function hideTip() { hoverId = null; }
+function hoverHtml(id: string) {
+  const g = game!;
+  const isHero = id === 'hero', defId = isHero ? g.heroDef.id : id;
+  const inf = infoFor(defId, isHero), gr = groupOf(isHero ? 'hero' : defId), dt = DTYPE[baseStats(defId, isHero).dtype];
+  const name = isHero ? g.heroDef.name : TOWER_MAP[id].name;
+  return `<div class="hb slotinfo" style="--gc:${gr.color}"><div class="hb-t"><b>${esc(name)} <span class="chip" style="background:var(--gc)">${esc(gr.name)}</span></b><span class="hb-line">${esc(inf.line)}</span><span class="hb-st">${esc(dt.name)}: ${esc(dt.blocked)}</span></div></div>`;
+}
+sbody.addEventListener('pointerover', (ev) => {
+  if (ev.pointerType !== 'mouse' || drag || placing) return;
   const card = (ev.target as HTMLElement).closest('.card[data-v]') as HTMLElement | null;
-  if (!card || !game) { if (tipFor && !(ev.target as HTMLElement).closest('#tip')) hideTip(); return; }
-  const id = card.dataset.v!, isHero = id === 'hero', defId = isHero ? game.heroDef.id : id;
-  if (tipFor === id) return;
-  tipFor = id;
-  const name = isHero ? game.heroDef.name : TOWER_MAP[id].name;
-  tip.innerHTML = `<div class="tip-h"><b>${esc(name)}</b><span class="chip">${esc(infoFor(defId, isHero).tag)}</span></div><div class="ti">${infoBody(defId, isHero, true)}</div><div class="tip-f">Drag onto the map to build · click ${ICON.info} Info for upgrades</div>`;
-  const r = card.getBoundingClientRect(), sr = $('#side').getBoundingClientRect();
-  tip.classList.add('on');
-  const th = tip.offsetHeight;
-  tip.style.left = `${Math.max(8, sr.left - tip.offsetWidth - 10)}px`;
-  tip.style.top = `${Math.max(8, Math.min(window.innerHeight - th - 8, r.top + r.height / 2 - th / 2))}px`;
+  hoverId = card ? card.dataset.v! : null;
 });
-document.addEventListener('pointerdown', hideTip, true);
+sbody.addEventListener('pointerleave', () => { hoverId = null; });
+function flashSlot() { waveBox.classList.remove('shake'); void waveBox.offsetWidth; waveBox.classList.add('shake'); }
 
 // ================================================================ field HUD bar: placement / aiming / rally instructions
-const hudbar = $('#hudbar');
 let hudKey = '';
 function renderHud() {
   if (!game) return;
@@ -583,12 +580,13 @@ function renderHud() {
     key = 'r';
     html = `<div class="hb"><div class="hb-t"><b>Move Rally Point</b><span>Tap the road inside the blue circle</span></div><button class="hb-x btn3d redb" data-h="cancel">${ICON.close}<span>Cancel</span></button></div>`;
   }
+  if (!key && hoverId) { key = `h|${hoverId}`; html = hoverHtml(hoverId); }
   if (key === hudKey) return;
   hudKey = key;
-  hudbar.innerHTML = html;
-  hudbar.classList.toggle('on', !!html);
+  if (html) { waveBox.innerHTML = html; waveBox.classList.add('slot'); }
+  else { waveBox.classList.remove('slot'); waveKey = ''; renderWaveBox(); }
 }
-hudbar.addEventListener('pointerdown', (ev) => {
+waveBox.addEventListener('pointerdown', (ev) => {
   const el = (ev.target as HTMLElement).closest('[data-h]') as HTMLElement | null;
   if (!el) return;
   ev.stopPropagation(); audio.play('click');

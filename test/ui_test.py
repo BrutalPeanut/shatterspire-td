@@ -48,10 +48,16 @@ with sync_playwright() as p:
     road = pg.evaluate("() => { const pts = __ss.game.map.paths[0]; const q = pts[Math.floor(pts.length / 2)]; return __ss.worldToClient(q.x, q.y); }")
     c = pg.locator('.card[data-v="archer"]').bounding_box()
     pg.mouse.move(c['x'] + 30, c['y'] + 30); pg.mouse.down(); pg.mouse.move(road['x'], road['y'], steps=6)
-    bar = pg.inner_text('#hudbar')
-    check('Too close to the path' in bar, f'hud bar explains invalid spot while dragging ({bar.splitlines()[-2:]})')
+    bar = pg.inner_text('#wavebox')
+    check('Too close to the path' in bar, f'info slot explains invalid spot while dragging ({bar.splitlines()[-2:]})')
+    covered = pg.evaluate("""(() => { const r = document.querySelector('#canvas').getBoundingClientRect(); const bad = [];
+      for (let fx = 0.05; fx < 1; fx += 0.15) for (let fy = 0.03; fy < 0.75; fy += 0.12) { const e = document.elementFromPoint(r.left + r.width * fx, r.top + r.height * fy); if (e && e.id !== 'canvas') bad.push(e.id || e.className); }
+      return bad; })()""")
+    vis = pg.evaluate("[...document.querySelectorAll('#toast .toast, #coach.on, #tip.on')].filter(e => e.offsetParent).length")
+    check(covered == [] and vis == 0, f'nothing covers the map while dragging ({covered[:3]}, {vis} floating)')
     pg.mouse.up(); pg.wait_for_timeout(100)
-    check(towers(pg) == 2 and 'Too close to the path' in pg.inner_text('#toast'), 'invalid drop builds nothing and toasts the reason')
+    check(towers(pg) == 2 and 'Too close to the path' in pg.inner_text('#wavebox'), 'invalid drop builds nothing, keeps the tower in hand, and the slot keeps the reason')
+    pg.keyboard.press('Escape')
     # 4. drop back on the panel cancels
     c = pg.locator('.card[data-v="archer"]').bounding_box()
     pg.mouse.move(c['x'] + 30, c['y'] + 30); pg.mouse.down(); pg.mouse.move(c['x'] + 90, c['y'] + 120, steps=5); pg.mouse.up(); pg.wait_for_timeout(100)
@@ -59,7 +65,7 @@ with sync_playwright() as p:
     pg.evaluate('__ss.game.gold = 5000')
     # 5. tap-to-place + Escape
     pg.click('.card[data-v="mage"]'); pg.wait_for_timeout(80); check(pg.evaluate('__ss.ui().placing') == 'mage', 'tap card enters placement')
-    check(pg.locator('#hudbar.on').count() == 1 and 'Fire Mage' in pg.inner_text('#hudbar'), 'placement shown in the field bar')
+    check('Fire Mage' in pg.inner_text('#wavebox') and pg.locator('#hudbar').count() == 0, 'placement shown in the side panel slot, not on the map')
     after = card_boxes(pg); check(before == after, 'Armory cards did not move when placement started')
     pg.keyboard.press('Escape'); check(pg.evaluate('__ss.ui().placing') is None, 'Escape cancels placement')
     pg.click('.card[data-v="mage"]'); s = pg.evaluate(FIND_SPOT, True); pg.mouse.click(s['x'], s['y']); pg.wait_for_timeout(80)
@@ -88,7 +94,7 @@ with sync_playwright() as p:
     # 8b. tower explanations: role tags, info sheet while placing, info from the tower panel
     check(all(pg.inner_text(f'.card[data-v="{v}"] .role').strip() for v in ['archer','cannon','bard','mine']), 'every Armory card shows a role tag')
     pg.click('.card[data-v="cannon"]'); pg.wait_for_timeout(80)
-    check('whole group' in pg.inner_text('#hudbar'), 'placement bar says what the tower does')
+    check('whole group' in pg.inner_text('#wavebox'), 'placement slot says what the tower does')
     pg.click('[data-h="info"]'); pg.wait_for_timeout(80)
     txt = pg.inner_text('#modal')
     check('Glooms' in txt and 'Ragnarök Mortar' in txt and 'Good against' in txt.title() or 'GOOD AGAINST' in txt.upper(), 'info sheet: damage type, counters and all upgrade names')
@@ -200,7 +206,7 @@ with sync_playwright() as p:
     new_game(pg)
     c = pg.locator('.card[data-v="barracks"]').bounding_box(); s = pg.evaluate(FIND_SPOT, True)
     pg.mouse.move(c['x'] + 30, c['y'] + 30); pg.mouse.down(); pg.mouse.move(s['x'], s['y'], steps=8)
-    check(pg.evaluate("!!document.querySelector('#hudbar') && __ss.ui().ghost && __ss.ui().ghost.valid"), 'barracks ghost valid')
+    check(pg.evaluate("__ss.ui().ghost && __ss.ui().ghost.valid"), 'barracks ghost valid')
     pg.mouse.up(); pg.wait_for_timeout(100)
     t = pg.evaluate("(() => { const t = __ss.game.towers[0]; return __ss.worldToClient(t.x, t.y); })()")
     pg.mouse.click(t['x'], t['y']); pg.click('[data-a="rally"]')
