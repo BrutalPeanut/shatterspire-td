@@ -1,12 +1,9 @@
 # Handoff notes
 
-## >>> PICK UP HERE (end of 2026-11-15, late)
-1. **Open + merge ONE PR from branch `playtest-overhaul`** (it contains `audio-enemies-labels` too, so no separate PR is needed for that).
-   - Compare link: https://github.com/BrutalPeanut/shatterspire-td/compare/main...playtest-overhaul?expand=1
-   - Blocked last session: GitHub signed out in Brian's Chrome. If still signed out, send him https://github.com/login (never type the password).
-   - After merge: check the Pages Actions run is green, `git checkout main && git pull --ff-only`, delete the old branches.
-2. Republish the artifact (https://claude.ai/artifact/VwzxiE8yFLsDbxp2C9VpWT) from `npx vite build --mode single` if main changed after this.
-3. Give Brian the play link: https://brutalpeanut.github.io/shatterspire-td/?unlockall
+## >>> PICK UP HERE (end of 2026-11-15, after PR #3)
+1. PR #3 (`playtest-overhaul`, which included `audio-enemies-labels`) was merged 2026-11-15 and Pages deployed green.
+2. GitHub is signed in inside the **built-in browser** (Claude desktop app pane). Use it for PRs; Chrome is signed out. Brian prefers the built-in browser.
+3. Play link: https://brutalpeanut.github.io/shatterspire-td/?unlockall (artifact copy: https://claude.ai/artifact/VwzxiE8yFLsDbxp2C9VpWT#unlockall).
 4. Open threads:
    - Not reproduced, so watch in playtests: Reinforce "no feedback at 184 lives" and Lyra Chrono Field "showing at Lv 6". Both now have explicit feedback and unit tests (see below).
    - Medium Ember (bot dies w30) / Summit (bot dies w30, was w40 before wave 26/28 respacing) and Hard. Is that intended? Brian decides.
