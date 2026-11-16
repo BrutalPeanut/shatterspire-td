@@ -130,5 +130,28 @@ for (const m of MAPS) {
   ok(g.powerBlock('chest') === null && g.usePower('chest') && g.gold === 650 + 500, 'chest +500');
 }
 
+// ---- defeat recap names the real cause, and a lost wave can be retried
+{
+  const { analyzeDefeat } = await import('../src/core/analysis');
+  const g = fresh('medium'); g.gold = 1e6;
+  for (let i = 0; i < 8; i++) { const s = findSpot(g); const t = g.placeTower('archer', s.x, s.y)!; g.upgrade(t, 0); g.upgrade(t, 0); g.upgrade(t, 2); }
+  g.gold = 2500; g.round = 20; g.lives = 60;
+  g.startWave(); // wave 21: Glooms + Ironclads
+  let n = 0; while (g.state === 'wave' && n++ < 60 * 300) g.update(STEP);
+  ok(g.state === 'over', 'sharp-only defense loses wave 21');
+  const rc = analyzeDefeat(g);
+  ok(rc.round === 21 && rc.leaks.length > 0, `recap lists leaks (${rc.leaks.map((l) => l.name + ':' + l.lives).join(', ')})`);
+  ok(/Ironclad/.test(rc.cause), `cause blames Ironclads: "${rc.cause}"`);
+  ok(rc.tips.some((t) => t.tower === 'mage'), 'tip points to a Sharp-proof answer');
+  ok(rc.tips.some((t) => /unspent/.test(t.text)), 'tip calls out unspent gold');
+  ok(rc.history[rc.history.length - 1].round === 21 && rc.history[rc.history.length - 1].lost === 60, 'history records the fatal wave');
+  const r = Game.restore(g.waveStartSave!);
+  ok(r.round === 20 && r.state === 'build' && r.lives === 60 && r.towers.length === 8 && r.gold === 2500, 'retry restores the pre-wave state');
+  // giant leak
+  const g2 = fresh('easy'); g2.round = 25; g2.lives = 200; g2.startWave(); n = 0; while (g2.state === 'wave' && n++ < 60 * 400) g2.update(STEP);
+  const rc2 = analyzeDefeat(g2);
+  ok(g2.state === 'over' && rc2.tips.length > 0 && rc2.cause.length > 10, `empty defense on w26 gets a cause: "${rc2.cause}"`);
+}
+
 console.log(`${passes} passed, ${fails} failed`);
 if (fails) process.exit(1);

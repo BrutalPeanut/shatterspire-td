@@ -23,6 +23,13 @@
 - **Settings:** effects/music volume sliders, Graphics High/Low (Low = still menu backdrop, DPR 1), Fullscreen, Replay tutorial. The menu demo battle animates only on the title screen at 30fps and stops when the tab is hidden.
 - **Saves:** the run format is still v1. New fields (`dmg`, `kills`, `assists`, `rally`) are optional and old saves load (unit test). The profile gains `tutorialDone` (true for existing players), `lastMap`, `lastDiff`, `sfxVol`, `musicVol`, `quality`.
 
+### Tower explanations + defeat recap (2026-11-15, night)
+- `src/ui/towerInfo.ts`: per-tower role tag, one-liner, good/weak against, base stats, damage type. Shown on Armory cards (tag), the desktop hover tip, the placement bar (+ Info button), the selected-tower panel, and the full info sheet (all 3 upgrade paths).
+- Defeat recap, modelled on BTD6 (continue/retry) and Kingdom Rush (tip on defeat), but with an actual diagnosis. Logic is `src/core/analysis.ts` `analyzeDefeat(g)`: what leaked on the fatal wave, a headline cause, up to 4 tips with tower links, and lives lost per wave.
+  - Causes are checked in this order: boss, giant, immunity (nothing could hurt it), shadowed without True Sight, fast enemies without slows/blockers, then volume.
+- **Retry wave:** `Game.waveStartSave` (snapshot at `startWave`) is restored. Powers from a defeat are granted only when leaving the run (Restart/Menu), so retries can't farm them.
+- Live leak ribbons are grouped every 0.7s ("Leaked: 3 Ogres (−15 lives)"), and the Lives pill shakes.
+
 ### Tests
 - `npx tsx test/unit.ts`: timing, reinforce cap, placement reasons, hero unlock levels, save compatibility, deploy preview, wave preview, powers (155 checks).
 - `python3 test/ui_test.py` against `npx vite preview --port 4173` runs real Chrome:

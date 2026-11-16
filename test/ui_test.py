@@ -156,6 +156,35 @@ with sync_playwright() as p:
     check(errs == [], f'no page errors {errs}')
     ctx.close()
 
+    # ------------------------------------------------ defeat recap + retry wave
+    print('defeat recap')
+    ctx = b.new_context(viewport={'width': 1366, 'height': 768}); pg = ctx.new_page(); errs = []
+    pg.on('pageerror', lambda e: errs.append(str(e)))
+    pg.goto(BASE + '&t=d9'); pg.wait_for_timeout(600)
+    new_game(pg, diff='easy')
+    c = pg.locator('.card[data-v="archer"]').bounding_box(); s = pg.evaluate(FIND_SPOT, True)
+    pg.mouse.move(c['x'] + 30, c['y'] + 30); pg.mouse.down(); pg.mouse.move(s['x'], s['y'], steps=4); pg.mouse.up()
+    pg.evaluate("__ss.game.round = 20; __ss.game.lives = 5; __ss.game.gold = 3000")
+    pg.click('#startBtn'); pg.keyboard.press('f'); pg.keyboard.press('f')
+    for _ in range(60):
+        pg.wait_for_timeout(500)
+        if pg.evaluate("__ss.game.state") == 'over': break
+    pg.wait_for_timeout(300)
+    txt = pg.inner_text('#modal')
+    check('What got through' in txt or 'WHAT GOT THROUGH' in txt.upper(), 'defeat recap lists what got through')
+    check(pg.locator('.rc-cause').count() == 1 and len(pg.inner_text('.rc-cause')) > 15, f'recap names a cause ({pg.inner_text(".rc-cause")[:70]})')
+    check(pg.locator('.rc-tips li').count() >= 1, 'recap gives tips')
+    if pg.locator('.rc-info').count():
+        pg.click('.rc-info >> nth=0'); pg.wait_for_timeout(80)
+        check(pg.locator('[data-m="recap"]').count() == 1, 'tip opens tower info with a way back')
+        pg.click('[data-m="recap"]'); pg.wait_for_timeout(80)
+    pw = pg.evaluate("JSON.stringify(JSON.parse(localStorage.getItem('shatterspire.profile.v1')).powers)")
+    pg.click('[data-m="retrywave"]'); pg.wait_for_timeout(200)
+    check(pg.evaluate('__ss.game.round') == 20 and pg.evaluate('__ss.game.state') == 'build' and pg.evaluate('__ss.game.lives') == 5 and pg.evaluate('__ss.game.towers.length') == 1, 'Retry wave restores the pre-wave state')
+    check(pg.evaluate("JSON.stringify(JSON.parse(localStorage.getItem('shatterspire.profile.v1')).powers)") == pw, 'retrying does not hand out powers')
+    check(errs == [], f'no page errors {errs}')
+    ctx.close()
+
     # ------------------------------------------------ barracks rally + save/reload
     print('barracks + save/reload')
     ctx = b.new_context(viewport={'width': 1366, 'height': 768}); pg = ctx.new_page(); errs = []

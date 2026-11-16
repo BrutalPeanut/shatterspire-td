@@ -11,6 +11,7 @@ import { TOWERS, TOWER_MAP, canUpgradePath } from './core/towers';
 import { HEROES, HERO_MAP, HERO_XP } from './core/heroes';
 import { PERKS, POWERS, canBuyPerk, powersEarned } from './core/progress';
 import { waveInfo, type WaveInfo } from './core/waves';
+import { analyzeDefeat } from './core/analysis';
 import { WORLD_H, WORLD_W, type Difficulty, type Targeting } from './core/types';
 import { Renderer, type Overlay } from './render/renderer';
 import { drawEnemyModel } from './render/enemyArt';
@@ -666,6 +667,20 @@ coach.addEventListener('pointerdown', (ev) => {
 
 // ================================================================ events
 const SHOT_SOUND: Record<string, string> = { arrow: 'bow', firearrow: 'bow', thorn: 'bow', shard: 'bow', star: 'fire', fireball: 'fire', comet: 'fire', bomb: 'cannon', bolt: 'zap', ballista: 'ballista', sweep: 'swing', frost: 'frost', potion: 'potion', vine: 'whip' };
+const leakAgg: Record<string, { n: number; lives: number }> = {};
+let leakTimer = 0;
+/** One ribbon per burst of leaks: "Leaked: 3 Ogres, 1 Troll (−19 lives)". */
+function flushLeaks() {
+  leakTimer = 0;
+  const ents = Object.entries(leakAgg).sort((a, b) => b[1].lives - a[1].lives);
+  if (!ents.length) return;
+  const total = ents.reduce((s, [, v]) => s + v.lives, 0);
+  const what = ents.slice(0, 2).map(([n, v]) => `${v.n} ${n}${v.n > 1 && !n.endsWith('s') ? 's' : ''}`).join(', ') + (ents.length > 2 ? '…' : '');
+  for (const k of Object.keys(leakAgg)) delete leakAgg[k];
+  if (game && game.state === 'over') return;
+  toast(`Leaked: ${what} (−${fmt(total)} lives)`, 'bad');
+  const sb = document.querySelector('.stat.lives'); if (sb) { sb.classList.remove('hit'); void (sb as HTMLElement).offsetWidth; sb.classList.add('hit'); }
+}
 function handleEvents() {
   if (!game) return;
   const g = game;
@@ -674,7 +689,7 @@ function handleEvents() {
       case 'pop': audio.play(e.big ? 'bigpop' : 'pop', { x: e.x }); break;
       case 'shoot': audio.play(SHOT_SOUND[e.kind] ?? 'bow', { x: e.x }); break;
       case 'boom': audio.play('boom', { x: e.x }); break;
-      case 'leak': audio.play('leak'); if (e.lives >= 50) toast(`A giant broke through: −${fmt(e.lives)} lives!`, 'bad'); break;
+      case 'leak': audio.play('leak'); { const l = (leakAgg[e.name] ??= { n: 0, lives: 0 }); l.n++; l.lives += e.lives; if (!leakTimer) leakTimer = window.setTimeout(flushLeaks, 700); } break;
       case 'waveStart': audio.play(e.boss ? 'boss' : 'wave'); if (e.boss) toast('⚠ Boss wave!', 'bad'); break;
       case 'waveEnd': onWaveEnd(e.round); break;
       case 'levelUp': audio.play('level'); toast(`Hero reached level ${e.level}!`, 'good'); break;
@@ -702,6 +717,10 @@ function onWaveEnd(round: number) {
   if (game.state === 'build' && !wi.freeplay) { const big = wi.threats.find((t) => t.danger); if (big) toast(`Next: ${big.tag}. Check Details`, 'bad'); }
 }
 
+/** Powers earned by a defeat are granted when the player leaves the run (not on Retry, so retries can't farm them). */
+let pendingPowers: string[] = [];
+function grantPending() { for (const p of pendingPowers) profile.powers[p] = (profile.powers[p] ?? 0) + 1; if (pendingPowers.length) saveProfile(profile); pendingPowers = []; }
+let recapHtml = '';
 function onGameEnd(won: boolean) {
   if (!game || endHandled) return;
   endHandled = true;
@@ -709,26 +728,56 @@ function onGameEnd(won: boolean) {
   const g = game;
   audio.play(won ? 'win' : 'lose');
   const earned = powersEarned(g.round, won);
-  for (const p of earned) profile.powers[p] = (profile.powers[p] ?? 0) + 1;
-  let medal = '';
+  const pwIcons = earned.map((id) => POWERS.find((p) => p.id === id)!.icon).join(' ');
+  const top = g.towers.filter((t) => !t.isHero || t.dmg > 0).sort((a, b) => b.dmg - a.dmg).slice(0, 3)
+    .map((t) => `<li><b>${esc(t.isHero ? HERO_MAP[t.defId].name : TOWER_MAP[t.defId].name)}</b>: ${fmtShort(t.dmg)} damage</li>`).join('');
   if (won) {
+    for (const p of earned) profile.powers[p] = (profile.powers[p] ?? 0) + 1;
+    let medal = '';
     const m = (profile.medals[g.map.id] ??= {});
     if (!m[g.diff]) medal = `🏅 New medal: ${g.map.name} (${DIFF[g.diff].label})! +1 knowledge point`;
     m[g.diff] = 1;
+    saveProfile(profile);
+    modal(`<h2>🏆 Victory!</h2>
+      <div class="hint">You held ${esc(g.map.name)} through all ${g.totalWaves} waves. Unspent gold: ${fmtShort(g.gold)}</div>
+      ${top ? `<ul class="wlist">${top}</ul>` : ''}
+      ${medal ? `<div class="hint" style="color:#a8680f">${medal}</div>` : ''}${earned.length ? `<div class="hint">Powers earned: ${pwIcons}</div>` : ''}
+      <button class="mbtn big btn3d gilt" data-m="freeplay">Continue: Freeplay</button>
+      <button class="mbtn btn3d woodb" data-m="restart">Restart</button>
+      <button class="mbtn btn3d woodb" data-m="menu">Main Menu</button>`);
+    return;
   }
-  saveProfile(profile);
-  if (!won) clearRun();
-  const pw = earned.length ? `<div class="hint">Powers earned: ${earned.map((id) => POWERS.find((p) => p.id === id)!.icon).join(' ')}</div>` : '';
-  const top = g.towers.filter((t) => !t.isHero || t.dmg > 0).sort((a, b) => b.dmg - a.dmg).slice(0, 3)
-    .map((t) => `<li><b>${esc(t.isHero ? HERO_MAP[t.defId].name : TOWER_MAP[t.defId].name)}</b>: ${fmtShort(t.dmg)} damage</li>`).join('');
-  modal(`
-    <h2>${won ? '🏆 Victory!' : '💀 The Spire Has Fallen'}</h2>
-    <div class="hint">${won ? `You held ${g.map.name} through all ${g.totalWaves} waves.` : `You survived ${g.round - 1} wave${g.round === 2 ? '' : 's'}.`} Unspent gold: ${fmtShort(g.gold)}</div>
-    ${top ? `<ul class="wlist">${top}</ul>` : ''}
-    ${medal ? `<div class="hint" style="color:#a8680f">${medal}</div>` : ''}${pw}
-    ${won ? '<button class="mbtn big btn3d gilt" data-m="freeplay">Continue: Freeplay</button>' : ''}
-    <button class="mbtn btn3d woodb" data-m="restart">Restart</button>
-    <button class="mbtn btn3d woodb" data-m="menu">Main Menu</button>`);
+  pendingPowers = earned;
+  const rc = analyzeDefeat(g);
+  const maxLeak = Math.max(1, ...rc.leaks.map((l) => l.lives));
+  const leakRows = rc.leaks.slice(0, 5).map((l) => `<div class="rc-leak"><span class="rc-ln">${l.n}× ${esc(l.name)}</span><span class="rc-bar"><i style="width:${Math.max(6, (l.lives / maxLeak) * 100)}%"></i></span><b>−${fmt(l.lives)}</b></div>`).join('');
+  const maxH = Math.max(1, ...rc.history.map((h) => h.lost));
+  const hist = rc.history.map((h) => `<div class="rc-col ${h.round === rc.round ? 'last' : ''}" title="Wave ${h.round}: −${h.lost} lives"><i style="height:${h.lost ? Math.max(8, (h.lost / maxH) * 100) : 2}%"></i><span>${h.round}</span></div>`).join('');
+  const tips = rc.tips.map((t) => `<li>${esc(t.text)}${t.tower ? ` <button class="rc-info" data-m="tinfo:${t.tower}">${ICON.info} ${esc(TOWER_MAP[t.tower].name)}</button>` : ''}</li>`).join('');
+  const canRetry = !!g.waveStartSave;
+  recapHtml = `<h2>💀 The Spire Has Fallen</h2>
+    <div class="hint">${esc(g.map.name)} · ${DIFF[g.diff].label} · fell on wave ${rc.round}</div>
+    <div class="rc-cause">${esc(rc.cause)}</div>
+    ${leakRows ? `<div class="ti-h">What got through on wave ${rc.round}</div><div class="rc-leaks">${leakRows}</div>` : ''}
+    ${rc.history.length > 1 ? `<div class="ti-h">Lives lost per wave</div><div class="rc-hist">${hist}</div>` : ''}
+    ${tips ? `<div class="ti-h">How to hold next time</div><ul class="rc-tips">${tips}</ul>` : ''}
+    ${top ? `<details class="rc-more"><summary>Your top towers</summary><ul class="wlist">${top}</ul></details>` : ''}
+    ${canRetry ? `<button class="mbtn big btn3d gilt" data-m="retrywave">↻ Retry wave ${rc.round}</button><div class="hint rc-small">Restarts this wave with your defenses as they were before it began, so you can rebuild.</div>` : ''}
+    <button class="mbtn btn3d woodb" data-m="restart">Restart map</button>
+    <button class="mbtn btn3d woodb" data-m="menu">Main Menu</button>
+    ${earned.length ? `<div class="hint rc-small">Powers ${pwIcons} are yours when you leave this run.</div>` : ''}`;
+  modal(recapHtml);
+}
+
+function retryWave() {
+  if (!game || !game.waveStartSave) return;
+  const hist = game.history.slice(0, -1);
+  const g = Game.restore(game.waveStartSave, profile.perks);
+  g.history = hist;
+  game = g;
+  saveRun(g);
+  beginSession();
+  toast(`Wave ${g.round + 1}: rebuild, then press Start`, 'info');
 }
 
 // ================================================================ modal + menus
@@ -742,8 +791,11 @@ modalEl.addEventListener('click', (ev) => {
   const m = el.dataset.m!;
   if (m === 'resume') closeModal();
   else if (m === 'freeplay') { game?.continueFreeplay(); endHandled = false; closeModal(); if (game) saveRun(game); }
-  else if (m === 'restart') { if (game) { clearRun(); startGame(game.map.id, game.diff, game.heroId); } closeModal(); }
-  else if (m === 'menu') { if (game && game.state === 'build' && game.round > 0) saveRun(game); closeModal(); showMenu('main'); }
+  else if (m === 'restart') { grantPending(); if (game) { clearRun(); startGame(game.map.id, game.diff, game.heroId); } closeModal(); }
+  else if (m === 'retrywave') { closeModal(); retryWave(); }
+  else if (m.startsWith('tinfo:')) { towerInfoModal(m.slice(6), false); const btn = modalEl.querySelector('[data-m="resume"]'); if (btn && recapHtml && game?.state === 'over') { btn.setAttribute('data-m', 'recap'); btn.textContent = '‹ Back to recap'; } }
+  else if (m === 'recap') modal(recapHtml);
+  else if (m === 'menu') { grantPending(); if (game && game.state === 'over') clearRun(); else if (game && game.state === 'build' && game.round > 0) saveRun(game); closeModal(); showMenu('main'); }
   else if (m === 'auto') { toggleAuto(); pauseMenu(); }
   else if (m === 'sfx') { profile.settings.sfx = !profile.settings.sfx; audio.setSfx(profile.settings.sfx); saveProfile(profile); pauseMenu(); }
   else if (m === 'music') { profile.settings.music = !profile.settings.music; audio.setMusic(profile.settings.music); saveProfile(profile); pauseMenu(); }

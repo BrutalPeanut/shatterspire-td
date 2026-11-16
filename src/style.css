@@ -448,3 +448,25 @@ body.dragging, body.dragging * { cursor: grabbing !important; }
 .hb-btns { display: flex; flex-direction: column; gap: 5px; flex-shrink: 0; }
 .hb-btns .hb-x { height: 30px; font-size: 12px; justify-content: center; }
 @media (min-width: 700px) and (min-height: 461px) { .hb-btns { flex-direction: row; } .hb-btns .hb-x { height: 36px; } }
+
+/* ---- defeat recap */
+.rc-cause { margin: 8px 0 10px; padding: 9px 11px; border-radius: 10px; text-align: left; font-weight: 800; font-size: 14px; line-height: 1.35; color: #fff3e8; background: linear-gradient(180deg, #a8221a, #6a0e0a); box-shadow: inset 0 0 0 1.5px rgba(255,210,180,0.35), 0 3px 8px rgba(0,0,0,0.3); }
+.rc-leaks { margin: 4px 0 8px; }
+.rc-leak { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) auto; align-items: center; gap: 8px; font-size: 12.5px; font-weight: 800; text-align: left; margin: 3px 0; }
+.rc-ln { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rc-bar { height: 9px; border-radius: 5px; background: rgba(74,42,18,0.18); overflow: hidden; }
+.rc-bar i { display: block; height: 100%; background: linear-gradient(90deg, #d8432f, #8a1610); }
+.rc-leak b { color: #8a1610; font-family: 'Lilita One', sans-serif; font-weight: 400; font-size: 14px; }
+.rc-hist { display: flex; align-items: flex-end; gap: 3px; height: 64px; margin: 4px 0 10px; padding: 4px 4px 0; border-radius: 8px; background: rgba(255,255,255,0.28); box-shadow: inset 0 0 0 1px rgba(74,42,18,0.35); }
+.rc-col { flex: 1; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; gap: 2px; }
+.rc-col i { display: block; width: 100%; max-width: 22px; border-radius: 3px 3px 0 0; background: #c48a5a; }
+.rc-col.last i { background: #b8302a; }
+.rc-col span { font-size: 9px; font-weight: 800; color: var(--ink2); }
+.rc-tips { text-align: left; padding-left: 18px; margin: 4px 0 10px; font-size: 13px; font-weight: 700; line-height: 1.4; }
+.rc-tips li { margin: 5px 0; }
+.rc-info { display: inline-flex; align-items: center; gap: 3px; margin-left: 4px; padding: 1px 7px; border-radius: 7px; font-size: 11.5px; font-weight: 800; color: #fff; background: #2f6fd6; vertical-align: 1px; }
+.rc-info .ico { width: 12px; height: 12px; }
+.rc-more { text-align: left; font-size: 13px; font-weight: 700; margin: 2px 0 6px; } .rc-more summary { cursor: pointer; font-weight: 800; color: var(--ink2); }
+.rc-small { font-size: 12px !important; margin-top: -2px; }
+.stat.lives.hit { animation: livesHit .5s; }
+@keyframes livesHit { 0%, 100% { transform: none; } 20% { transform: translateX(-3px) scale(1.08); filter: drop-shadow(0 0 8px #ff3a2a); } 50% { transform: translateX(3px); } }
