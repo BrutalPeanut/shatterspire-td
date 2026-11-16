@@ -497,3 +497,24 @@ body.dragging, body.dragging * { cursor: grabbing !important; }
 .gg-h b { font-family: 'Cinzel', serif; font-weight: 900; font-size: 14px; } .gg-h span { font-size: 12px; font-weight: 800; }
 .gg-t { padding: 6px 9px 8px; font-size: 13px; font-weight: 700; line-height: 1.35; }
 .grp.one .grp-h span { display: none; }
+
+/* ---- the side panel's info slot: placement / aiming / rally / hover info live here, never over the map */
+#wavebox.slot .hb { height: 76px; overflow: hidden; padding: 5px 6px 5px 7px; border-radius: 10px; box-shadow: inset 0 0 0 2px var(--goldline), inset 0 0 0 3.5px var(--wood4), 0 3px 0 var(--wood4); pointer-events: auto; }
+#wavebox.slot .hb-t b { font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#wavebox.slot .hb-line { font-size: 11px !important; line-height: 1.2; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+#wavebox.slot .hb-st { font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#wavebox.slot .hb-btns { flex-direction: column; gap: 4px; } #wavebox.slot .hb-btns .hb-x { height: 30px; font-size: 11.5px; padding: 0 8px; }
+#wavebox.slot .hb img { width: 30px; height: 30px; }
+#wavebox.slot .slotinfo { background: var(--stone); }
+#wavebox.slot .chip { font-size: 9px; vertical-align: 1px; margin-left: 4px; }
+#wavebox.shake { animation: livesHit .4s; }
+@media (orientation: portrait) { #wavebox.slot .hb { height: 66px; padding: 4px 5px; } #wavebox.slot .hb-line { -webkit-line-clamp: 1; } }
+@media (max-height: 460px) and (orientation: landscape) { #wavebox.slot .hb { height: 58px; padding: 3px 5px; } #wavebox.slot .hb-line { display: none; } #wavebox.slot .hb-btns .hb-x { height: 24px; } #wavebox.slot .hb img { width: 24px; height: 24px; } }
+/* nothing floats over the battlefield while you are placing a tower */
+#field.coach-hide #toast { display: none; }
+#tip { display: none !important; }
+@media (max-height: 460px) and (orientation: landscape) {
+  #wavebox.slot .hb img { display: none; }
+  #wavebox.slot .hb-x span { display: none; } #wavebox.slot .hb-btns .hb-x { width: 30px; padding: 0; }
+  #wavebox.slot .hb-st { white-space: normal; line-height: 1.15; font-size: 11px; }
+}
