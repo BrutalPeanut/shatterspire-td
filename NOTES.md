@@ -47,6 +47,10 @@
 - An invalid drag-drop keeps the tower in hand (tap mode) so the reason stays visible.
 - A UI test samples points across the canvas mid-drag and fails if anything but the canvas is on top.
 
+### Bug: towers wouldn't drop (fixed 2026-11-15)
+- Root cause: touch drags lift the tower 42px above the finger, but the drop and hover checks tested the finger (`overCanvas`), not the tower. For spots in the bottom ~42px of the map the finger sat below the canvas (on the spell strip), so drops were silently discarded while the ghost showed valid. Fix: `dropOnMap()` tests the lifted tower position, and the lift shrinks near the top edge so the top rows stay reachable.
+- Regression: `ui_test.py` touch-drags to the bottom and top edges. `test/soak.py` runs about 70 random human-like actions per input type (drag, tap, select, upgrade, info, guide, waves, speed), and every valid drop must build.
+
 ### Tests
 - `npx tsx test/unit.ts`: timing, reinforce cap, placement reasons, hero unlock levels, save compatibility, deploy preview, wave preview, powers (155 checks).
 - `python3 test/ui_test.py` against `npx vite preview --port 4173` runs real Chrome:
@@ -57,6 +61,7 @@
   - barracks rally + save/reload
   - portrait touch drag + tap placement + tutorial
   - landscape touch drag
+- `python3 test/soak.py`: random-session soak, mouse and touch (needs the preview server).
 - Bot: `SEED=n HOARD=0.4 HERO=lyra LEAKS=1 npx tsx test/bot.ts caverns easy 40` (HOARD = fraction of income banked; LEAKS prints what got through).
 
 ### Working alongside ChatGPT (from 2026-11-15)

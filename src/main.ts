@@ -86,12 +86,14 @@ if (typeof ResizeObserver !== 'undefined') new ResizeObserver(() => layout()).ob
 const TOUCH_LIFT = 42; // css px: keep a dragged tower visible above the finger
 function toWorld(ev: { clientX: number; clientY: number; pointerType?: string }, lift = false) {
   const r = canvas.getBoundingClientRect();
-  const dy = lift && ev.pointerType && ev.pointerType !== 'mouse' ? TOUCH_LIFT : 0;
+  // Lift shrinks near the top edge so the top rows of the map are still reachable with a finger.
+  const dy = lift && ev.pointerType && ev.pointerType !== 'mouse' ? Math.min(TOUCH_LIFT, Math.max(0, ev.clientY - r.top - 4)) : 0;
   return { x: ((ev.clientX - r.left) / r.width) * WORLD_W, y: ((ev.clientY - dy - r.top) / r.height) * WORLD_H };
 }
-function overCanvas(ev: { clientX: number; clientY: number }) {
-  const r = canvas.getBoundingClientRect();
-  return ev.clientX >= r.left && ev.clientX <= r.right && ev.clientY >= r.top && ev.clientY <= r.bottom;
+/** Is the (lifted) tower position on the map? Drag/drop must test the tower, not the finger under it. */
+function dropOnMap(ev: { clientX: number; clientY: number; pointerType?: string }) {
+  const p = toWorld(ev, true);
+  return p.x >= 0 && p.x <= WORLD_W && p.y >= 0 && p.y <= WORLD_H;
 }
 
 function toast(msg: string, kind: 'info' | 'bad' | 'good' = 'info') {
@@ -154,7 +156,7 @@ function activateDrag() {
 window.addEventListener('pointermove', (ev) => {
   if (!drag || !game || ev.pointerId !== drag.pid) return;
   if (!drag.active && Math.hypot(ev.clientX - drag.x, ev.clientY - drag.y) > 8) activateDrag();
-  if (drag.active) { if (overCanvas(ev)) { updateGhost(toWorld(ev, true)); cursor = ghost ? { x: ghost.x, y: ghost.y } : null; } else ghost = undefined; }
+  if (drag.active) { if (dropOnMap(ev)) { updateGhost(toWorld(ev, true)); cursor = ghost ? { x: ghost.x, y: ghost.y } : null; } else ghost = undefined; }
 });
 window.addEventListener('pointerup', (ev) => {
   if (!drag || !game || ev.pointerId !== drag.pid) return;
@@ -165,7 +167,7 @@ window.addEventListener('pointerup', (ev) => {
   if (!d.active && !moved) { beginPlacing(d.id); return; } // simple tap: tap-to-place mode
   if (!d.active) activateDrag();
   // an invalid drop keeps the tower in hand (tap mode) so the reason stays visible and you can tap a better spot
-  if (overCanvas(ev)) { updateGhost(toWorld(ev, true)); tryPlace(ev.shiftKey); }
+  if (dropOnMap(ev)) { updateGhost(toWorld(ev, true)); tryPlace(ev.shiftKey); }
   else cancelPlacing();
 });
 window.addEventListener('pointercancel', (ev) => {
