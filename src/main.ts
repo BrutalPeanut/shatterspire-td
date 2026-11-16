@@ -11,6 +11,7 @@ import { TOWERS, TOWER_MAP, canUpgradePath } from './core/towers';
 import { HEROES, HERO_MAP, HERO_XP } from './core/heroes';
 import { PERKS, POWERS, canBuyPerk, powersEarned } from './core/progress';
 import { waveInfo, type WaveInfo } from './core/waves';
+import { upgradeDelta } from './core/delta';
 import { analyzeDefeat, recommendTower } from './core/analysis';
 import { POWER_PRICE, SHARDS_BOSS_WAVE, SHARDS_PER_WAVE, SHARDS_VICTORY, VAULT_LEVELS, collectVault, spendShards, upgradeVault, vaultCap, vaultFullIn, vaultStored } from './core/vault';
 import { WORLD_H, WORLD_W, type Difficulty, type Targeting } from './core/types';
@@ -511,7 +512,7 @@ function towerPanel(t: Tower) {
       let btn: string;
       if (tier >= 5) btn = `<div class="up max"><div class="un">${esc(d.upgrades[p][4].name)} <span>MAX</span></div></div>`;
       else if (!canUpgradePath(t.tiers, p)) btn = `<div class="up closed"><div class="un">${esc(d.upgrades[p][tier].name)} <span>${ICON.lock.replace('class="ico"', 'class="ico sm"')}</span></div><div class="ud">Path closed: 2 paths max, only one past tier 2</div></div>`;
-      else { const u = d.upgrades[p][tier]; const cost = g.upgradeCost(t, p); btn = `<button class="up btn3d woodb" data-a="up" data-v="${p}" data-cost="${cost}"><div class="un">${esc(u.name)} <span class="uc">${ICON.coinSmall}${fmt(cost)}</span></div><div class="ud">${esc(u.desc)}</div></button>`; }
+      else { const u = d.upgrades[p][tier]; const cost = g.upgradeCost(t, p); btn = `<button class="up btn3d woodb" data-a="up" data-v="${p}" data-cost="${cost}"><div class="un">${esc(u.name)} <span class="uc">${ICON.coinSmall}${fmt(cost)}</span></div><div class="ud">${esc(u.desc)}</div><div class="udl">${upgradeDelta(d, t.tiers, p).map(esc).join(' · ')}</div></button>`; }
       h += `<div class="path"><div class="path-h p${p}">${esc(d.paths[p])}<div class="pips">${pips}</div></div>${btn}</div>`;
     }
     if (t.stats.bank) h += `<div class="row"><button class="btn btn3d gilt" data-a="withdraw">${ICON.coinSmall} Withdraw ${fmt(t.bank)}</button></div>`;
@@ -535,11 +536,11 @@ function infoBody(defId: string, isHero: boolean, compact: boolean) {
     <div class="ti-gw"><div><div class="ti-h good">Good against</div><ul>${good}</ul></div><div><div class="ti-h weak">Weak against</div><ul>${weak}</ul></div></div>`;
   if (!compact && !isHero) {
     const d = TOWER_MAP[defId];
-    h += `<div class="ti-h">Upgrade paths (pick 2, only one past tier 2)</div><div class="ti-paths">${d.paths.map((pn, p) => `<div class="ti-path"><div class="path-h p${p}">${esc(pn)}</div><ol>${d.upgrades[p].map((u) => `<li><b>${esc(u.name)}</b><span>${esc(u.desc)}</span></li>`).join('')}</ol></div>`).join('')}</div>`;
+    h += `<div class="ti-h">Upgrade paths (pick 2, only one past tier 2)</div><div class="ti-paths">${d.paths.map((pn, p) => `<div class="ti-path"><div class="path-h p${p}">${esc(pn)}</div><ol>${d.upgrades[p].map((u, k) => { const tr = [0, 0, 0]; tr[p] = k; return `<li><b>${esc(u.name)}</b><span>${esc(u.desc)}</span><span class="udl">${upgradeDelta(d, tr, p).map(esc).join(' · ')}</span></li>`; }).join('')}</ol></div>`).join('')}</div>`;
   }
   if (!compact && isHero) {
     const hd = HERO_MAP[defId];
-    h += `<div class="ti-h">Abilities</div><ul class="ti-ab">${hd.abilities.map((a) => `<li><b>Lv ${a.level}: ${esc(a.def.name)}</b> ${esc(a.desc)}</li>`).join('')}</ul><div class="hint">Heroes level up every wave (max 10).</div>`;
+    h += `<div class="ti-h">Abilities</div><ul class="ti-ab">${hd.abilities.map((a) => `<li><b>Lv ${a.level}: ${esc(a.def.name)}</b> ${esc(a.desc)}</li>`).join('')}</ul><div class="hint">Heroes earn XP every wave: roughly a level every 2-3 waves, reaching level 10 around wave 27.</div>`;
   }
   return h;
 }

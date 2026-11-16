@@ -153,6 +153,17 @@ for (const m of MAPS) {
   ok(g2.state === 'over' && rc2.tips.length > 0 && rc2.cause.length > 10, `empty defense on w26 gets a cause: "${rc2.cause}"`);
 }
 
+// ---- upgrade deltas come from real stats and never come up empty
+{
+  const { upgradeDelta } = await import('../src/core/delta');
+  const { TOWERS } = await import('../src/core/towers');
+  let empty = 0;
+  for (const t of TOWERS) for (let p = 0; p < 3; p++) for (let k = 0; k < 5; k++) { const tr = [0, 0, 0]; tr[p] = k; if (!upgradeDelta(t, tr, p).length) empty++; }
+  ok(empty === 0, `every one of the 150 upgrades changes something measurable (${empty} empty)`);
+  const archer = TOWERS.find((t) => t.id === 'archer')!;
+  ok(upgradeDelta(archer, [0, 2, 0], 1).join('|') === 'Damage 1→3|Pierce 2→4|NEW: can hurt Ironclads', `Piercing Bolts delta: ${upgradeDelta(archer, [0, 2, 0], 1).join('|')}`);
+}
+
 // ---- advisor suggests a real counter
 {
   const { recommendTower } = await import('../src/core/analysis');

@@ -10,7 +10,7 @@
 
 **Unfinished work: branch `design-pass` (pushed, NOT merged, balance not final).** It was interrupted by newer requests. It branches from main at 0881fcd, so rebase it onto main first (conflicts are likely in game.ts and unit.ts). What it holds:
 - `test/strategies.ts`: five rule-based strategies (wide, tall, eco, control, support) across maps and difficulties. `DETAIL=1 npx tsx test/strategies.ts all medium` prints leak waves; `RunResult.tension` is how far the lead enemy got each wave (% of road), which is the best pacing metric we have.
-- `src/core/delta.ts`: `upgradeDelta(def, tiers, path)` returns what an upgrade really changes, computed from stats (e.g. "Damage 3→6 · Speed 1.1→1.5/s · NEW: can hurt Ironclads"). All 150 upgrades produce a non-empty delta. **Not wired into the UI yet.** Wire it into the upgrade buttons in `towerPanel()` and the info sheet (a small line under each description).
+- `src/core/delta.ts`: `upgradeDelta(def, tiers, path)` returns what an upgrade really changes, computed from stats. **Already on main (PR #10)**: shown under every upgrade button and in the info sheet.
 - Shatter-through (in `Game.damage`): overkill damage left after breaking a layer is shared between every child it splits into (`Game.SHATTER_CARRY`, 1 = all of it). Plus a `shatter` event and "SHATTER ×N" text when one hit breaks 6+/10+ layers. This is the proposed identity mechanic. It makes big hits and Meteor Shower noticeably stronger, so late waves need more pressure.
 - Boss crack points (`EnemyDef.cracks`): at 66/33% (dragon 75/50/25%) of its shell a boss staggers 1.5s and sheds minions behind it; bosses no longer spill children on death, so killing the boss ends its threat. Dragon's timed behemoth spawn became 2 hydras every 9s.
 - `Enemy.born` (road fraction where it appeared), `waveLeaks[].late`, `Game.bossLeak`, `Tower.blocked` (immune hits by enemy name), an `immune` event and floating "IMMUNE" text.
@@ -23,13 +23,13 @@ Baseline findings on main, before those changes (simulation, one seed, bots have
 - Cheap tower spam does NOT dominate specialised builds, so no tower caps are needed.
 - Wave-40 losses were not the dragon leaking. They were behemoths the dragon spawned or spilled near the exit. Where a giant breaks decides where its children start, and nothing told the player that. It is the key lesson to teach.
 - Waves 1-5 have almost no tension (lead enemy reaches about 11% of the road).
-- Text audit: descriptions match mechanics, with two exceptions: heroes do not level "every wave" (XP is 60+10×wave, about a level every 2-3 waves, level 10 near wave 27), and a base Gold Mine pays back in about 13 waves, not 10. **Both strings are still wrong on main** (`GROUPS` hero text and the mine entry in `src/ui/towerInfo.ts`, plus the hero info sheet in main.ts).
+- Text audit: descriptions match mechanics, with two exceptions: heroes do not level "every wave" (XP is 60+10×wave, about a level every 2-3 waves, level 10 near wave 27), and a base Gold Mine pays back in about 13 waves, not 10. Both strings were fixed on main in PR #10.
 - With shatter-through and cracks on (before the +15-20% wave bump), Medium Meadowbrook became flawless for all four strategies run on it (tall, support, control, wide), which is too easy; hence the bump.
 
 Next steps for `design-pass`, in order:
 1. Rebase, run `npx tsx test/unit.ts`, then the strategy matrix on easy/medium/hard. Target on Medium: strong builds win with some losses, `wide` loses late or scrapes by, and tension in waves 31-39 reaches 75-95% so wave 40 is not the first hard wave. Keep Easy winnable by all five; keep Hard hard.
 2. If balance will not settle quickly, set `SHATTER_CARRY = 0.75` (roughly neutral versus the old first-child-only rule) and revert the wave 31-40 bumps.
-3. Wire `upgradeDelta` into the UI; fix the two wrong strings; show `Tower.blocked` in the tower panel ("37 hits bounced off Ironclads").
+3. Show `Tower.blocked` in the tower panel ("37 hits bounced off Ironclads"). (Upgrade deltas and the two string fixes are done on main.)
 4. Teach "break giants early": a Tower Guide line, and a defeat-recap cause that uses `waveLeaks[].late` and `bossLeak.hpFrac`.
 5. Combat feel: distinct sounds for the `immune`, `shatter` and `crack` events (audio.ts has no handlers for them yet), a bigger burst when a giant splits, notches on the boss bar for crack points, respect `prefers-reduced-motion`.
 6. Move toasts off the map (render them over the side-panel info slot).

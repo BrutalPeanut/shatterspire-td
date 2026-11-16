@@ -22,7 +22,7 @@ export const TOWER_INFO: Record<string, TowerInfo> = {
   ballista: { tag: 'Sniper', line: 'Hits anywhere on the map with heavy single bolts. Your giant and boss killer.', good: ['Giants and bosses', 'Shadowed (Spotter\'s Scope)', 'Any spot on the map'], weak: ['Big swarms', 'Ironclads until Iron Tips'] },
   alchemist: { tag: 'Acid', line: 'Acid splash that every enemy is vulnerable to. Can also buff towers or brew gold.', good: ['Any enemy type', 'Stripping Regrow and Fortified', 'Buffing your best towers'], weak: ['Low raw damage'] },
   bard: { tag: 'Support', line: 'Doesn\'t attack. Songs make nearby towers faster and stronger.', good: ['Boosting a cluster of towers', 'Letting towers hit Ironclads/Shadowed', 'Gold (Thrift path)'], weak: ['Useless with no towers nearby'] },
-  mine: { tag: 'Income', line: 'Doesn\'t attack. Earns gold at the end of every wave.', good: ['Long games: pays for itself after ~10 waves'], weak: ['Adds no defense'] },
+  mine: { tag: 'Income', line: 'Doesn\'t attack. Earns gold at the end of every wave.', good: ['Long games: pays for itself in about 13 waves, sooner with upgrades'], weak: ['Adds no defense'] },
 };
 
 export const HERO_INFO: Record<string, TowerInfo> = {
@@ -75,7 +75,7 @@ export function baseStats(defId: string, isHero: boolean) {
 export interface TowerGroup { id: string; name: string; short: string; how: string; color: string; towers: string[] }
 export const GROUPS: TowerGroup[] = [
   { id: 'hero', name: 'Hero', short: 'Levels up', color: '#7a4fd6', towers: ['hero'],
-    how: 'One per battle. Gains a level every wave and unlocks two abilities. Put it where the fighting is heaviest.' },
+    how: 'One per battle. Levels up every 2-3 waves (max level 10) and unlocks two abilities. Put it where the fighting is heaviest.' },
   { id: 'crowd', name: 'Crowd Damage', short: 'Hit groups', color: '#d8572f', towers: ['knight', 'mage', 'cannon'],
     how: 'Hit many enemies at once. Your answer to swarms. Put them on bends and where the road doubles back, so they reach more of it.' },
   { id: 'single', name: 'Single Target', short: 'Big enemies', color: '#2f7fd8', towers: ['archer', 'ballista'],
@@ -92,5 +92,6 @@ export const BUILD_ORDER = [
   'Add Single Target before the first big enemies (Golems, then Giants from wave 26).',
   'Add Control where your damage overlaps, so enemies stay in range longer.',
   'Once nothing is leaking, add Support next to your best towers, or a Gold Mine early on for a long game.',
+  'Break giants early. Everything inside a giant spills out where it dies, so kill it far from your Spire.',
   'Check the Next Wave box: it names the counter you need (Ironclads, Shadowed, Giants…).',
 ];
