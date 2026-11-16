@@ -19,6 +19,9 @@ export const ICON = {
   lock: svg(`${gold}<path d="M10 14v-4a6 6 0 0 1 12 0v4" fill="none" stroke="#9aa4b0" stroke-width="3.4"/><path d="M10 14v-4a6 6 0 0 1 12 0v4" fill="none" stroke="${O}" stroke-width="1" opacity=".6"/><rect x="7" y="14" width="18" height="14" rx="3" fill="url(#gd)" stroke="${O}" stroke-width="2"/><circle cx="16" cy="20" r="2.2" fill="${O}"/><path d="M16 21v3.5" stroke="${O}" stroke-width="2"/>`),
   book: svg(`${gold}<path d="M4 7c4-2 8-2 12 1 4-3 8-3 12-1v19c-4-2-8-2-12 1-4-3-8-3-12-1z" fill="#7a2a1a" stroke="${O}" stroke-width="2" stroke-linejoin="round"/><path d="M6 8.5c3-1 6-1 9.5 1.5v15c-3.5-2.4-6.5-2.4-9.5-1.5zM26 8.5c-3-1-6-1-9.5 1.5v15c3.5-2.4 6.5-2.4 9.5-1.5z" fill="#f6e7c1"/><path d="M16 9v17" stroke="${O}" stroke-width="1.4"/><path d="M8.5 13h4.5M8.5 16h4.5M19 13h4.5M19 16h4.5" stroke="#a8875a" stroke-width="1.2"/>`),
   close: svg(`<path d="M8 8l16 16M24 8L8 24" stroke="${O}" stroke-width="6" stroke-linecap="round"/><path d="M8 8l16 16M24 8L8 24" stroke="#f2ead6" stroke-width="3" stroke-linecap="round"/>`),
+  pause: svg(`<rect x="7" y="5" width="7" height="22" rx="2" fill="#fff6d8" stroke="${O}" stroke-width="2"/><rect x="18" y="5" width="7" height="22" rx="2" fill="#fff6d8" stroke="${O}" stroke-width="2"/>`),
+  flag: svg(`<path d="M8 29V4" stroke="${O}" stroke-width="3" stroke-linecap="round"/><path d="M9 5c5-2 9 2 16 0v11c-7 2-11-2-16 0z" fill="#3a86e0" stroke="${O}" stroke-width="2" stroke-linejoin="round"/>`),
+  info: svg(`<circle cx="16" cy="16" r="12.5" fill="#3a86e0" stroke="${O}" stroke-width="2"/><circle cx="16" cy="10" r="2.2" fill="#fff"/><rect x="14" y="14" width="4" height="10" rx="1.5" fill="#fff"/>`),
   coinSmall: '',
 };
 ICON.coinSmall = ICON.coin.replace('class="ico"', 'class="ico sm"');

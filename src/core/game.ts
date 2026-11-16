@@ -26,6 +26,8 @@ export interface Tower {
   uid: number; defId: string; isHero: boolean; x: number; y: number; radius: number;
   tiers: number[]; targeting: Targeting; stats: TowerStats;
   cds: number[]; angle: number; pops: number; spent: number;
+  /** Damage actually removed from enemies (layers + giant HP), and status/support contributions. */
+  dmg: number; kills: number; assists: number;
   abilities: { def: AbilityDef; left: number }[];
   bank: number; xp: number; level: number;
   buffs: Buffs; brewBuff: (Buffs & { t: number }) | null; brewT: number; anim: number;
@@ -44,8 +46,8 @@ export interface Particle { x: number; y: number; vx: number; vy: number; t: num
 
 export type GameEvent =
   | { type: 'pop'; x: number; y: number; big: boolean }
-  | { type: 'shoot'; kind: string }
-  | { type: 'boom' }
+  | { type: 'shoot'; kind: string; x: number }
+  | { type: 'boom'; x: number }
   | { type: 'leak'; lives: number }
   | { type: 'waveStart'; round: number; boss: boolean }
   | { type: 'waveEnd'; round: number; reward: number }
@@ -106,7 +108,7 @@ export class Game {
   nextId = 1; rnd: () => number; grid = new Grid();
   rallyT = 0; crescendoT = 0; freezeT = 0; chronoT = 0; zeroBossT = 0;
   spells: Spell[];
-  stats = { pops: 0, leaked: 0 };
+  stats = { pops: 0, leaked: 0, leakedBy: {} as Record<string, number> };
   globalSlow = 0; ballistaBuff = 0; mineBonus = 0;
   auraTowers: Tower[] = [];
   private tmp: Enemy[] = []; private tmp2: Enemy[] = [];
@@ -118,13 +120,13 @@ export class Game {
     this.diff = opts.difficulty;
     this.heroId = opts.heroId;
     this.perks = new Set(opts.perks ?? []);
-    this.lives = DIFF[this.diff].lives + (this.perks.has('medics') ? 25 : 0);
+    this.lives = this.maxLives;
     if (this.perks.has('purse')) this.gold += 150;
     this.rnd = mulberry(opts.seed ?? 1234);
     this.spells = [
       { id: 'meteor', name: 'Meteor Shower', icon: '☄️', cd: 60, left: 0, targeted: true, desc: 'Tap the map: 150 damage in a big blast' },
       { id: 'freeze', name: 'Time Freeze', icon: '⏸️', cd: 90, left: 0, targeted: false, desc: 'Freeze all enemies for 4s (bosses slowed)' },
-      { id: 'reinforce', name: 'Reinforce Walls', icon: '🛡️', cd: 150, left: 0, targeted: false, desc: '+25 lives' },
+      { id: 'reinforce', name: 'Reinforce Walls', icon: '🛡️', cd: 150, left: 0, targeted: false, desc: 'Restore up to 25 lives (never above your starting lives). Works between waves too' },
     ];
     if (this.perks.has('spells')) for (const s of this.spells) s.cd *= 0.8;
   }
@@ -152,13 +154,26 @@ export class Game {
   sellValue(t: Tower) { return Math.floor(t.spent * 0.7); }
 
   // ---------------------------------------------------------- placement
-  canPlace(x: number, y: number, radius: number): boolean {
-    if (x < radius || y < radius || x > WORLD_W - radius || y > WORLD_H - radius) return false;
-    for (const p of this.map.paths) if (distToPath(x, y, p) < PATH_WIDTH / 2 + radius - 4) return false;
-    for (const o of this.map.obstacles) if (Math.hypot(o.x - x, o.y - y) < o.r + radius * 0.6) return false;
-    for (const t of this.towers) if (Math.hypot(t.x - x, t.y - y) < t.radius + radius) return false;
-    return true;
+  canPlace(x: number, y: number, radius: number): boolean { return this.placeBlock(x, y, radius) === null; }
+  /** Why a spot is invalid (null = buildable). Single source of truth for placement validation. */
+  placeBlock(x: number, y: number, radius: number): string | null {
+    if (x < radius || y < radius || x > WORLD_W - radius || y > WORLD_H - radius) return 'Too close to the edge';
+    for (const p of this.map.paths) if (distToPath(x, y, p) < PATH_WIDTH / 2 + radius - 4) return 'Too close to the path';
+    for (const o of this.map.obstacles) if (Math.hypot(o.x - x, o.y - y) < o.r + radius * 0.6) return o.kind === 'water' ? 'Can\'t build on water' : o.kind === 'lava' ? 'Can\'t build on lava' : 'Blocked by terrain';
+    for (const t of this.towers) if (Math.hypot(t.x - x, t.y - y) < t.radius + radius) return 'Overlaps another tower';
+    return null;
   }
+  /** Placement check including cost. */
+  placeError(defId: string, x: number, y: number): string | null {
+    if (defId === 'hero' && this.heroPlaced) return 'Hero already deployed';
+    const radius = defId === 'hero' ? this.heroDef.radius : TOWER_MAP[defId].radius;
+    const b = this.placeBlock(x, y, radius);
+    if (b) return b;
+    const cost = this.towerCost(defId, x, y);
+    if (this.gold < cost) return `Not enough gold (need ${Math.ceil(cost - this.gold)} more)`;
+    return null;
+  }
+  get maxLives() { return DIFF[this.diff].lives + (this.perks.has('medics') ? 25 : 0); }
 
   placeTower(defId: string, x: number, y: number): Tower | null {
     const isHero = defId === 'hero';
@@ -170,7 +185,7 @@ export class Game {
     if (cost === 0 && !isHero) this.freeTower = false;
     const t: Tower = {
       uid: this.nextId++, defId: isHero ? this.heroId : defId, isHero, x, y, radius, tiers: [0, 0, 0],
-      targeting: 'first', stats: null as unknown as TowerStats, cds: [], angle: -Math.PI / 2, pops: 0, spent: cost,
+      targeting: 'first', stats: null as unknown as TowerStats, cds: [], angle: -Math.PI / 2, pops: 0, spent: cost, dmg: 0, kills: 0, assists: 0,
       abilities: [], bank: 0, xp: 0, level: 1, buffs: noBuffs(), brewBuff: null, brewT: 1, anim: 0, rally: null,
     };
     this.recompute(t);
@@ -212,35 +227,64 @@ export class Game {
 
   setupSoldiers(t: Tower) {
     const b = t.stats.barracks!;
-    if (!t.rally) {
-      let best = { path: 0, d: 0, dist: Infinity };
-      this.paths.forEach((p, pi) => {
-        for (let d = 0; d <= p.len; d += 6) {
-          pointAt(p, d, this.v);
-          if (this.v.x < 10 || this.v.y < 10 || this.v.x > WORLD_W - 10 || this.v.y > WORLD_H - 10) continue;
-          const dist = Math.hypot(this.v.x - t.x, this.v.y - t.y);
-          if (dist < best.dist) best = { path: pi, d, dist };
-        }
-      });
-      t.rally = { path: best.path, d: best.d };
-    }
+    if (!t.rally) { const dp = this.deployPoint(t.x, t.y)!; t.rally = { path: dp.path, d: dp.d }; }
+    const rally = t.rally;
     const old = this.soldiers.filter((s) => s.tower === t);
     this.soldiers = this.soldiers.filter((s) => s.tower !== t);
     for (let i = 0; i < b.count; i++) {
-      const p = this.paths[t.rally.path];
-      pointAt(p, Math.max(0, Math.min(p.len, t.rally.d + (i - (b.count - 1) / 2) * 16)), this.v);
+      const p = this.paths[rally.path];
+      pointAt(p, Math.max(0, Math.min(p.len, rally.d + (i - (b.count - 1) / 2) * 16)), this.v);
       const prev = old[i];
       const ratio = prev && !prev.dead ? prev.hp / prev.maxHp : 1;
       this.soldiers.push({ tower: t, i, x: prev?.x ?? t.x, y: prev?.y ?? t.y, hx: this.v.x, hy: this.v.y, hp: b.hp * ratio, maxHp: b.hp, respawnT: prev?.dead ? prev.respawnT : 0, cd: 0, dead: prev?.dead ?? false, anim: 0, holding: 0 });
     }
   }
 
+  /** Rally reach: soldiers can be posted on any road within this distance of their barracks. */
+  static RALLY_RANGE = 150;
+  /**
+   * Default deploy point: the nearest road point. Ties (e.g. a tower beside a hairpin) go to the
+   * EARLIER point on the path so soldiers meet enemies at the entrance-side bend first.
+   */
+  deployPoint(x: number, y: number, maxDist = Infinity): { path: number; d: number; x: number; y: number } | null {
+    let best = { path: 0, d: 0, dist: Infinity, x: 0, y: 0 };
+    this.paths.forEach((p, pi) => {
+      for (let d = 0; d <= p.len; d += 4) {
+        pointAt(p, d, this.v);
+        if (this.v.x < 10 || this.v.y < 10 || this.v.x > WORLD_W - 10 || this.v.y > WORLD_H - 10) continue;
+        const dist = Math.hypot(this.v.x - x, this.v.y - y);
+        if (dist < best.dist - 6) best = { path: pi, d, dist, x: this.v.x, y: this.v.y };
+      }
+    });
+    if (best.dist > maxDist) return null;
+    return { path: best.path, d: best.d, x: best.x, y: best.y };
+  }
+  /** Move a barracks' rally point. Returns an error message, or null on success. */
+  setRally(t: Tower, x: number, y: number): string | null {
+    if (!t.stats.barracks) return 'Only Barracks have a rally point';
+    if (Math.hypot(x - t.x, y - t.y) > Game.RALLY_RANGE) return 'Too far from the barracks';
+    const dp = this.deployPoint(x, y, 40);
+    if (!dp || Math.hypot(dp.x - t.x, dp.y - t.y) > Game.RALLY_RANGE + 10) return 'Pick a spot on the road';
+    t.rally = { path: dp.path, d: dp.d };
+    this.setupSoldiers(t);
+    return null;
+  }
+  rallyPos(t: Tower) { if (!t.rally) return null; const v = { x: 0, y: 0 }; pointAt(this.paths[t.rally.path], t.rally.d, v); return v; }
+
+  /** Why a consumable power can't be used right now (null = usable). */
+  powerBlock(id: string): string | null {
+    if (this.state === 'over' || this.state === 'victory') return 'Battle is over';
+    if (id === 'merc' && this.freeTower) return 'Your next tower is already free';
+    if ((id === 'dragonfire' || id === 'hourglass') && !this.enemies.length) return 'Use it when enemies are on the field';
+    return null;
+  }
   usePower(id: string): boolean {
+    if (this.powerBlock(id)) return false;
     switch (id) {
       case 'chest': this.gold += 500; this.text(WORLD_W / 2, 60, '+500 gold', '#ffd23a'); break;
       case 'draught': this.lives += 50; this.text(WORLD_W / 2, 60, '+50 lives', '#7dff8a'); break;
       case 'merc': if (this.freeTower) return false; this.freeTower = true; this.text(WORLD_W / 2, 60, 'Next tower is free!', '#ffd23a'); break;
-      case 'dragonfire': if (!this.enemies.length) return false; for (const e of this.enemies.slice()) this.damage(e, 40, null); this.fx.push({ kind: 'ring', x: WORLD_W / 2, y: WORLD_H / 2, r: 700, t: 0, max: 0.8, color: '#ff5a1a' }); this.events.push({ type: 'boom' }); break;
+      case 'dragonfire': if (!this.enemies.length) return false; for (const e of this.enemies.slice()) this.damage(e, 40, null); this.fx.push({ kind: 'ring', x: WORLD_W / 2, y: WORLD_H / 2, r: 700, t: 0, max: 0.8, color: '#ff5a1a' }); this.events.push({ type: 'boom', x: WORLD_W / 2 }); break;
       case 'hourglass': if (!this.enemies.length) return false; for (const e of this.enemies) if (!e.def.boss) e.stunT = Math.max(e.stunT, 8); break;
       default: return false;
     }
@@ -351,6 +395,7 @@ export class Game {
     return { add, mul };
   }
   shatterBonus = 0;
+  lastHeal = 0;
 
   /** Apply an attack hit to an enemy. Returns false if the enemy is immune (blocks the projectile). */
   hit(e: Enemy, a: Attack, t: Tower, dmgOverride?: number): boolean {
@@ -366,11 +411,11 @@ export class Game {
     const coldImmune = a.dtype === 'cold' && e.def.immune.includes('cold');
     if (a.slow && !coldImmune) {
       const f = giant ? (a.slow.giants ?? 0) * (e.def.boss ? 0.5 : 1) : a.slow.f;
-      if (f > 0) { e.slowF = Math.max(e.slowF, f); e.slowT = Math.max(e.slowT, a.slow.dur); }
+      if (f > 0) { if (e.slowT <= 0) t.assists++; e.slowF = Math.max(e.slowF, f); e.slowT = Math.max(e.slowT, a.slow.dur); }
     }
     if (a.stun && !coldImmune) {
       const s = giant ? (e.def.boss ? (a.stunGiants ?? 0) * 0.3 : a.stunGiants ?? 0) : a.stun;
-      if (s > 0) { e.stunT = Math.max(e.stunT, s); e.frozen = a.dtype === 'cold'; }
+      if (s > 0) { if (e.stunT <= 0) t.assists++; e.stunT = Math.max(e.stunT, s); e.frozen = a.dtype === 'cold'; }
     } else if (giant && a.stunGiants && !e.def.boss) { e.stunT = Math.max(e.stunT, a.stunGiants); }
     if (a.burn) { e.burnDps = Math.max(e.burnDps, a.burn.dps); e.burnT = Math.max(e.burnT, a.burn.dur); e.burnBy = t; }
     if (a.acid) { e.acidDps = Math.max(e.acidDps, a.acid.dps); e.acidT = Math.max(e.acidT, a.acid.dur); e.acidBy = t; }
@@ -388,8 +433,9 @@ export class Game {
     let rem = amount;
     while (cur && rem > 0 && !cur.dead) {
       cur.flash = 0.08;
-      if (cur.hp > rem) { cur.hp -= rem; return; }
+      if (cur.hp > rem) { cur.hp -= rem; if (by) by.dmg += rem; return; }
       rem -= cur.hp;
+      if (by) by.dmg += cur.hp;
       cur = this.popLayer(cur, by);
     }
   }
@@ -397,7 +443,7 @@ export class Game {
   private popLayer(e: Enemy, by: Tower | null): Enemy | null {
     const def = e.def;
     let g = def.gold * this.popGold();
-    if (by) { by.pops++; g += by.stats.goldPerPop; if (e.type === 'iron') g += by.stats.ironGold; }
+    if (by) { by.pops++; if (def.children.length === 0) by.kills++; g += by.stats.goldPerPop; if (e.type === 'iron') g += by.stats.ironGold; }
     this.gold += g;
     this.stats.pops++;
     if (by?.isHero) by.xp += def.giant ? 5 : 0.3;
@@ -514,7 +560,7 @@ export class Game {
     for (const e of this.enemies) {
       if (e.dead) continue;
       e.flash = Math.max(0, e.flash - dt);
-      e.wob += dt * 8;
+      e.wob += dt * (3 + e.def.speed / 22) * (e.stunT > 0 || e.blockT > 0 || this.freezeT > 0 ? 0 : 1);
       // DoTs
       if (e.burnT > 0) { e.burnT -= dt; e.burnAcc += e.burnDps * dt; if (e.burnAcc >= 1) { const n = Math.floor(e.burnAcc); e.burnAcc -= n; this.damage(e, n, e.burnBy); if (this.rnd() < 0.3) this.particle(e.x, e.y, '#ff8a2a', 2); } }
       if (e.dead) continue;
@@ -548,6 +594,7 @@ export class Game {
         const lost = e.def.boss ? 99999 : Math.ceil(rbe(e.type) - (e.maxHp - e.hp));
         this.lives -= lost;
         this.stats.leaked += lost;
+        this.stats.leakedBy[e.def.name] = (this.stats.leakedBy[e.def.name] ?? 0) + lost;
         this.events.push({ type: 'leak', lives: lost });
         continue;
       }
@@ -634,26 +681,44 @@ export class Game {
     }
   }
 
+  /** Effective movement speed of an enemy right now (px/s along its path). */
+  enemySpeed(e: Enemy) {
+    if (e.stunT > 0 || e.blockT > 0 || (this.freezeT > 0 && !e.def.boss)) return 0;
+    let mul = (1 - e.slowF) * (1 - Math.min(0.8, e.auraSlow)) * (1 - (e.def.boss ? this.globalSlow * 0.5 : this.globalSlow));
+    if (this.chronoT > 0) mul *= e.def.boss ? 0.75 : 0.5;
+    return e.def.speed * DIFF[this.diff].speed * mul;
+  }
+  /** Where enemy e will be after `dt` seconds (two refinement passes are plenty). */
+  predict(e: Enemy, dt: number) {
+    const p = this.paths[e.path];
+    const out = { x: e.x, y: e.y };
+    const d = Math.min(p.len, e.d + this.enemySpeed(e) * Math.min(dt, 1.2));
+    if (d > 0) pointAt(p, d, out);
+    return out;
+  }
+
   fire(t: Tower, a: Attack, target: Enemy) {
     const pierce = a.pierce + t.buffs.pierce;
     const range = a.range === Infinity ? Infinity : a.range * (1 + t.buffs.range);
     switch (a.kind) {
       case 'proj': case 'lob': {
         const n = a.count ?? 1;
-        const base = Math.atan2(target.y - t.y, target.x - t.x);
         const speed = a.speed ?? 500;
+        // Lead the target: aim where it will be when the shot arrives (fast enemies otherwise outrun slow shells).
+        const aim = range === Infinity ? { x: target.x, y: target.y } : this.predict(target, Math.hypot(target.x - t.x, target.y - t.y) / speed);
+        const base = Math.atan2(aim.y - t.y, aim.x - t.x);
         for (let k = 0; k < n; k++) {
           const ang = base + (k - (n - 1) / 2) * (a.spread ?? 0);
           const lob = a.kind === 'lob';
-          const dist = Math.hypot(target.x - t.x, target.y - t.y);
+          const dist = Math.hypot(aim.x - t.x, aim.y - t.y);
           const life = lob ? dist / speed : range === Infinity ? 2.5 : (range + 80) / speed;
           this.projectiles.push({
             x: t.x, y: t.y, vx: Math.cos(ang) * speed, vy: Math.sin(ang) * speed, r: (a.size ?? 4) + 2,
-            pierce, life, atk: a, tower: t, hit: new Set(), lob, tx: target.x, ty: target.y,
+            pierce, life, atk: a, tower: t, hit: new Set(), lob, tx: aim.x, ty: aim.y,
             homing: range === Infinity && !lob ? target : null, depth: 0, dead: false, spin: 0,
           });
         }
-        this.events.push({ type: 'shoot', kind: a.visual });
+        this.events.push({ type: 'shoot', kind: a.visual, x: t.x });
         break;
       }
       case 'melee': case 'pulse': {
@@ -666,13 +731,13 @@ export class Game {
           this.hit(e, a, t); n--;
         }
         this.fx.push({ kind: a.kind === 'melee' ? 'sweep' : 'ring', x: t.x, y: t.y, r: range, t: 0, max: a.kind === 'melee' ? 0.22 : 0.4, color: a.color });
-        this.events.push({ type: 'shoot', kind: a.visual });
+        this.events.push({ type: 'shoot', kind: a.visual, x: t.x });
         break;
       }
       case 'hitscan': {
         this.fx.push({ kind: 'line', x: t.x, y: t.y, x2: target.x, y2: target.y, r: 3, t: 0, max: 0.18, color: a.color });
         this.impact(t, a, target, pierce);
-        this.events.push({ type: 'shoot', kind: 'ballista' });
+        this.events.push({ type: 'shoot', kind: 'ballista', x: t.x });
         break;
       }
       case 'chain': {
@@ -691,7 +756,7 @@ export class Game {
           cur = next;
         }
         this.fx.push({ kind: 'chain', x: t.x, y: t.y, pts, r: 2, t: 0, max: 0.2, color: a.color });
-        this.events.push({ type: 'shoot', kind: a.visual });
+        this.events.push({ type: 'shoot', kind: a.visual, x: t.x });
         break;
       }
       case 'groundfx': {
@@ -729,7 +794,7 @@ export class Game {
       this.hit(e, a, t, dmg); n--;
     }
     this.fx.push({ kind: 'boom', x, y, r: radius, t: 0, max: 0.3, color: a.dtype === 'acid' ? '#9dff3a' : a.dtype === 'magic' ? '#ff9a2a' : '#ffcf6a' });
-    this.events.push({ type: 'boom' });
+    this.events.push({ type: 'boom', x });
     if (a.cluster && depth < a.cluster.depth) {
       for (let k = 0; k < a.cluster.count; k++) {
         const ang = (k / a.cluster.count) * Math.PI * 2;
@@ -834,7 +899,7 @@ export class Game {
         const dist = Math.hypot(e.x - s.x, e.y - s.y);
         if (dist > e.def.radius + 10) continue;
         const canHold = (!e.def.giant || b.blockGiants) && (!e.def.boss || b.blockBoss);
-        if (canHold && held.length < b.block) { held.push(e); e.blockT = 0.08; if (b.stun && !e.def.giant) e.stunT = Math.max(e.stunT, b.stun); drain += e.def.boss ? 120 : e.def.giant ? e.def.rank * 4 : e.def.rank * 0.8; }
+        if (canHold && held.length < b.block) { held.push(e); if (e.blockT <= 0) s.tower.assists++; e.blockT = 0.08; if (b.stun && !e.def.giant) e.stunT = Math.max(e.stunT, b.stun); drain += e.def.boss ? 120 : e.def.giant ? e.def.rank * 4 : e.def.rank * 0.8; }
         else if (e.def.giant) drain += e.def.boss ? 400 : 25; // trampled
       }
       s.holding = held.length;
@@ -877,7 +942,7 @@ export class Game {
       if (fake) this.hit(e, a, fake); else this.damage(e, dmg, null);
     }
     this.fx.push({ kind: 'meteor', x, y, r, t: 0, max: 0.6, color });
-    this.events.push({ type: 'boom' });
+    this.events.push({ type: 'boom', x });
   }
 
   useAbility(t: Tower, id: string): boolean {
@@ -903,12 +968,22 @@ export class Game {
     return true;
   }
 
+  /** Why a spell can't be cast right now (null = castable). */
+  spellBlock(id: string): string | null {
+    const s = this.spells.find((s) => s.id === id);
+    if (!s) return 'Unknown spell';
+    if (this.state === 'over' || this.state === 'victory') return 'Battle is over';
+    if (s.left > 0) return `Recharging: ${Math.ceil(s.left)}s of battle time left`;
+    if (id === 'reinforce') { if (this.lives >= this.maxLives) return `Walls already at full strength (${this.maxLives} lives max)`; return null; }
+    if (this.state !== 'wave') return 'Only during a wave';
+    return null;
+  }
   castSpell(id: string, x = 0, y = 0): boolean {
     const s = this.spells.find((s) => s.id === id);
-    if (!s || s.left > 0 || this.state !== 'wave') return false;
+    if (!s || this.spellBlock(id)) return false;
     if (id === 'meteor') this.areaDamage(x, y, 95, this.perks.has('meteor') ? 240 : 150, this.towers[0] ?? null);
     else if (id === 'freeze') { this.freezeT = this.perks.has('freeze') ? 5.5 : 4; this.fx.push({ kind: 'ring', x: WORLD_W / 2, y: WORLD_H / 2, r: 700, t: 0, max: 0.8, color: '#bdf0ff' }); }
-    else if (id === 'reinforce') { const n = this.perks.has('walls') ? 40 : 25; this.lives += n; this.text(WORLD_W / 2, 60, `+${n} lives`, '#7dff8a'); }
+    else if (id === 'reinforce') { const n = Math.min(this.perks.has('walls') ? 40 : 25, this.maxLives - this.lives); this.lives += n; this.lastHeal = n; this.text(WORLD_W / 2, 60, `+${n} lives`, '#7dff8a'); }
     s.left = s.cd;
     this.events.push({ type: 'ability', id });
     return true;
@@ -934,7 +1009,7 @@ export class Game {
   serialize() {
     return {
       v: 1, mapId: this.map.id, difficulty: this.diff, heroId: this.heroId, gold: this.gold, lives: this.lives, round: this.round, freeplay: this.freeplay,
-      towers: this.towers.map((t) => ({ defId: t.isHero ? 'hero' : t.defId, x: t.x, y: t.y, tiers: t.tiers, targeting: t.targeting, spent: t.spent, pops: t.pops, bank: t.bank, xp: t.xp })),
+      towers: this.towers.map((t) => ({ defId: t.isHero ? 'hero' : t.defId, x: t.x, y: t.y, tiers: t.tiers, targeting: t.targeting, spent: t.spent, pops: t.pops, bank: t.bank, xp: t.xp, dmg: t.dmg, kills: t.kills, assists: t.assists, rally: t.rally })),
       spells: this.spells.map((s) => s.left),
     };
   }
@@ -945,6 +1020,7 @@ export class Game {
       const t = g.placeTower(s.defId, s.x, s.y);
       if (!t) continue;
       t.tiers = s.tiers.slice(); t.targeting = s.targeting as Targeting; t.spent = s.spent; t.pops = s.pops; t.bank = s.bank; t.xp = s.xp;
+      t.dmg = s.dmg ?? 0; t.kills = s.kills ?? 0; t.assists = s.assists ?? 0; if (s.rally) t.rally = s.rally;
       g.recompute(t);
     }
     g.gold = data.gold; g.lives = data.lives; g.round = data.round; g.freeplay = data.freeplay;

@@ -11,8 +11,12 @@ export interface Profile {
   medals: Record<string, Partial<Record<Difficulty | 'freeplay', number>>>; // value = 1 for medal, freeplay = best round
   perks: string[];
   powers: Record<string, number>;
-  settings: { sfx: boolean; music: boolean; autoStart: boolean };
+  settings: { sfx: boolean; music: boolean; autoStart: boolean; sfxVol: number; musicVol: number; quality: 'high' | 'low' };
+  /** First-run tutorial finished or dismissed. */
+  tutorialDone: boolean;
   lastHero: string;
+  lastMap?: string;
+  lastDiff?: Difficulty;
 }
 
 const KEY = 'shatterspire.profile.v1';
@@ -24,10 +28,10 @@ function safeSet(k: string, v: string) { try { localStorage.setItem(k, v); } cat
 function safeDel(k: string) { try { localStorage.removeItem(k); } catch { /* ignore */ } }
 
 export function loadProfile(): Profile {
-  const def: Profile = { v: 1, totalRounds: 0, medals: {}, perks: [], powers: { chest: 1, draught: 1 }, settings: { sfx: true, music: true, autoStart: false }, lastHero: 'aldric' };
+  const def: Profile = { v: 1, totalRounds: 0, medals: {}, perks: [], powers: { chest: 1, draught: 1 }, settings: { sfx: true, music: true, autoStart: false, sfxVol: 0.8, musicVol: 0.7, quality: 'high' }, lastHero: 'aldric', tutorialDone: false };
   const raw = safeGet(KEY);
   if (!raw) return def;
-  try { const p = JSON.parse(raw); return { ...def, ...p, settings: { ...def.settings, ...p.settings }, powers: { ...p.powers } }; } catch { return def; }
+  try { const p = JSON.parse(raw); return { ...def, tutorialDone: (p.totalRounds ?? 0) > 0, ...p, settings: { ...def.settings, ...p.settings }, powers: { ...p.powers } }; } catch { return def; }
 }
 export function saveProfile(p: Profile) { safeSet(KEY, JSON.stringify(p)); }
 
