@@ -78,3 +78,30 @@ export function analyzeDefeat(g: Game): Recap {
   if (g.towers.length <= 4 && g.round >= 10) tips.push({ text: `Only ${g.towers.length} towers by wave ${g.round}. More towers covering more of the road usually beats one big tower.` });
   return { round: g.round, leaks, cause, tips: tips.slice(0, 4), history: g.history.slice(-12), unspent: Math.floor(g.gold) };
 }
+
+// ---------------------------------------------------------------- advisor: one suggestion before each wave
+import { waveInfo } from './waves';
+/** A tower that would shore up the defense for the coming wave, or null when the basics are covered. */
+export function recommendTower(g: Game, round: number): { tower: string; why: string } | null {
+  const atk = g.towers.filter((t) => t.stats.attacks.length || t.stats.barracks);
+  const has = (id: string) => g.towers.some((t) => t.defId === id);
+  if (!atk.length) return { tower: 'archer', why: 'A cheap all-rounder to start with' };
+  const wi = waveInfo(round);
+  // an enemy type (or a layer inside it) that nothing you own can damage
+  const FIX: Record<string, [string, string]> = { sharp: ['mage', 'Ironclads shrug off arrows and blades: magic gets through'], blast: ['archer', 'Glooms ignore explosions: arrows work'], cold: ['archer', 'Frostlings ignore cold: add other damage'], magic: ['cannon', 'Hexlings ignore magic: explosions work'] };
+  for (const u of wi.units) {
+    const stack = [u.type];
+    while (stack.length) {
+      const d = ENEMIES[stack.pop()!];
+      if (d.immune.length && atk.every((t) => (t.stats.attacks.length ? t.stats.attacks : [{ dtype: 'sharp' as DamageType }]).every((a) => !g.canHurt({ def: d } as never, a.dtype, t)))) { const f = FIX[d.immune[0]]; if (f) return { tower: f[0], why: f[1] }; }
+      stack.push(...d.children.filter((c) => ENEMIES[c].rank >= 6));
+    }
+  }
+  const shadow = wi.threats.some((t) => t.tag === 'SHADOWED');
+  if (shadow && !g.towers.some((t) => t.stats.trueSight || t.buffs.trueSight || t.stats.aura?.trueSight)) return { tower: 'archer', why: 'Shadowed enemies are invisible: upgrade an Archer to Eagle Eye (Hawkeye path)' };
+  if ((wi.giant || wi.boss) && !has('ballista')) return { tower: 'ballista', why: 'Big enemies need heavy single hits' };
+  if (atk.length < 2) return { tower: 'knight', why: 'Put it on a bend: it hits everything in reach' };
+  if (round >= 4 && !has('knight') && !has('mage') && !has('cannon')) return { tower: 'cannon', why: 'Crowds are coming: explosions hit the whole group' };
+  if (round >= 8 && !has('druid') && !has('barracks')) return { tower: 'druid', why: 'Slows the crowd so your towers get more hits' };
+  return null;
+}

@@ -11,7 +11,7 @@ import { TOWERS, TOWER_MAP, canUpgradePath } from './core/towers';
 import { HEROES, HERO_MAP, HERO_XP } from './core/heroes';
 import { PERKS, POWERS, canBuyPerk, powersEarned } from './core/progress';
 import { waveInfo, type WaveInfo } from './core/waves';
-import { analyzeDefeat } from './core/analysis';
+import { analyzeDefeat, recommendTower } from './core/analysis';
 import { POWER_PRICE, SHARDS_BOSS_WAVE, SHARDS_PER_WAVE, SHARDS_VICTORY, VAULT_LEVELS, collectVault, spendShards, upgradeVault, vaultCap, vaultFullIn, vaultStored } from './core/vault';
 import { WORLD_H, WORLD_W, type Difficulty, type Targeting } from './core/types';
 import { Renderer, type Overlay } from './render/renderer';
@@ -40,8 +40,8 @@ document.getElementById('app')!.innerHTML = `
     <button class="tbtn btn3d greenb" id="startBtn"></button>
   </div>
   <div id="main">
-    <div id="field"><canvas id="canvas"></canvas><div id="coach"></div><div id="abil"></div><div id="toast"></div></div>
-    <div id="side"><div id="wavebox"></div><div id="sbody"></div></div>
+    <div id="field"><canvas id="canvas"></canvas><div id="abil"></div><div id="toast"></div></div>
+    <div id="side"><div id="coach"></div><div id="wavebox"></div><div id="sbody"></div></div>
   </div>
 </div>
 <div id="menu"><canvas id="menuBg"></canvas><div id="menuShade"></div><div id="menuBody"></div></div>
@@ -305,25 +305,30 @@ function refreshTop() {
 const waveBox = $('#wavebox');
 let waveKey = '';
 let waveInfoCache: WaveInfo | null = null;
+/** Tower the advisor suggests for the coming wave (starred in the Armory). */
+let recId: string | null = null;
 function renderWaveBox() {
   if (!game || waveBox.classList.contains('slot')) return;
   const g = game;
   const building = g.state === 'build';
   const r = building ? g.round + 1 : g.round;
   const left = g.enemies.length + g.queue.length;
-  const key = `${r}|${building}|${building ? 0 : Math.ceil(left / 5)}|${Math.floor(g.gold / 500)}`;
+  const key = `${r}|${building}|${building ? 0 : Math.ceil(left / 5)}|${Math.floor(g.gold / 500)}|${g.towers.length}|${g.towers.reduce((a, t) => a + t.tiers[0] + t.tiers[1] + t.tiers[2], 0)}|${profile.settings.advisor}`;
   if (key === waveKey) return;
   waveKey = key;
   if (!waveInfoCache || waveInfoCache.round !== r) waveInfoCache = waveInfo(r);
   const wi = waveInfoCache;
   const chips = wi.freeplay ? '<span class="chip">FREEPLAY</span>' : wi.threats.slice(0, 4).map((t) => `<span class="chip ${t.danger ? 'danger' : ''}">${esc(t.tag)}</span>`).join('');
+  const rec = building && profile.settings.advisor ? recommendTower(g, r) : null;
+  recId = rec?.tower ?? null;
+  const tip = rec ? `<span class="chip gold" title="${esc(rec.why)}">★ ${esc(TOWER_MAP[rec.tower].name)}</span>` : '';
   const hoard = building && (wi.giant || wi.boss) && g.gold >= 1500 ? `<span class="chip gold">${fmtShort(g.gold)} gold unspent</span>` : '';
   const head = building ? `Next: Wave ${r}${g.freeplay ? '' : `/${g.totalWaves}`}` : `Wave ${r}: ${left} enemies left`;
   const units = wi.units.map((u) => `${u.count} ${u.name}${u.count > 1 && !u.name.endsWith('s') ? 's' : ''}`).join(', ');
   waveBox.innerHTML = `<button class="wb" data-a="waveinfo" title="Wave details">
     <div class="wb-top"><span class="wb-h">${head}</span><span class="wb-more">${ICON.info}<span>Details</span></span></div>
     <div class="wb-units">${esc(units || 'Procedural freeplay wave')}</div>
-    <div class="wb-chips">${chips}${hoard}</div></button>`;
+    <div class="wb-chips">${tip}${chips}${hoard}</div></button>`;
 }
 function waveDetails() {
   if (!game) return;
@@ -332,7 +337,9 @@ function waveDetails() {
   const wi = waveInfo(r);
   const rows = wi.units.map((u) => `<li><b>${u.count}× ${esc(u.name)}</b>${u.mods.includes('s') ? ' · shadowed' : ''}${u.mods.includes('r') ? ' · regrow' : ''}${u.mods.includes('f') ? ' · fortified' : ''}${u.isNew ? ' <span class="chip">NEW</span>' : ''}</li>`).join('');
   const threats = wi.threats.map((t) => `<li class="${t.danger ? 'dg' : ''}"><span class="chip ${t.danger ? 'danger' : ''}">${esc(t.tag)}</span> ${esc(t.text)}</li>`).join('');
+  const rec = g.state === 'build' && profile.settings.advisor ? recommendTower(g, r) : null;
   modal(`<h2>Wave ${r}</h2>
+    ${rec ? `<div class="rc-cause advisor">★ Advisor: add a <b>${esc(TOWER_MAP[rec.tower].name)}</b>. ${esc(rec.why)}.</div>` : ''}
     ${wi.freeplay ? '<div class="hint">Freeplay waves are randomized giants and armored hordes that grow every round.</div>' : `<ul class="wlist">${rows}</ul>
     <div class="hint">Threat size: <b>${fmt(wi.rbe)}</b> layers${wi.worstLeak !== Infinity ? ` · worst single leak: <b>${fmt(wi.worstLeak)}</b> lives` : ''}.</div>`}
     ${threats ? `<ul class="tlist">${threats}</ul>` : '<div class="hint">No special traits. Any tower works.</div>'}
@@ -372,7 +379,7 @@ function buyUpgrade(p: number) {
   if (!canUpgradePath(t.tiers, p)) { audio.play('error'); toast('Path closed: only 2 paths, and only one past tier 2', 'bad'); return; }
   const cost = game.upgradeCost(t, p);
   if (game.gold < cost) { audio.play('error'); toast(`Not enough gold (need ${fmt(cost - game.gold)} more)`, 'bad'); return; }
-  if (game.upgrade(t, p)) { audio.play('upgrade'); panelKey = ''; }
+  if (game.upgrade(t, p)) { audio.play('upgrade'); panelKey = ''; tut('upgraded'); }
   else audio.play('error');
 }
 function sellSelected() {
@@ -455,6 +462,7 @@ function updateShop() {
     const id = el.dataset.v!;
     if (el.classList.contains('locked')) continue;
     el.classList.toggle('sel', placing === id);
+    el.classList.toggle('rec', recId === id);
     const cost = g.towerCost(id);
     if (id === 'hero') {
       const dep = g.heroPlaced;
@@ -589,7 +597,8 @@ function renderHud() {
   if (html) { waveBox.innerHTML = html; waveBox.classList.add('slot'); }
   else { waveBox.classList.remove('slot'); waveKey = ''; renderWaveBox(); }
 }
-waveBox.addEventListener('pointerdown', (ev) => {
+// click (not pointerdown): on touch, a pointerdown handler that swaps the UI lets the follow-up click land on whatever replaced it
+waveBox.addEventListener('click', (ev) => {
   const el = (ev.target as HTMLElement).closest('[data-h]') as HTMLElement | null;
   if (!el) return;
   ev.stopPropagation(); audio.play('click');
@@ -653,26 +662,40 @@ function renderAbil() {
 
 // ================================================================ first-run tutorial (non-blocking coach card)
 const coach = $('#coach');
-const TUT = [
-  { id: 'placed', title: 'Build a tower', text: 'Drag a tower from the Armory onto the grass, or tap it and then tap the map. The ring shows its range.' },
-  { id: 'selected', title: 'Upgrade it', text: 'Tap your tower to see its 3 upgrade paths. You can take 2 paths, and only one past tier 2.' },
-  { id: 'read', title: 'Know your enemy', text: 'The Next Wave box lists what\'s coming. Tags like SHARP-PROOF or GIANT tell you which towers you need.' },
-  { id: 'wave', title: 'Start the wave', text: 'Press Start (top right). Use Speed for 2× or 3×, and Pause any time.' },
+const TUT: { id: string; title: string; text: string; pulse?: string }[] = [
+  { id: 'placed', title: 'Build your first tower', text: 'Drag the Archer onto the glowing spot beside the road.', pulse: '.card[data-v="archer"]' },
+  { id: 'wave', title: 'Start the battle', text: 'Press the green Start button.', pulse: '#startBtn' },
+  { id: 'waveEnd', title: 'Hold the line', text: 'Enemies follow the road to your Spire. Every one that gets through costs lives.' },
+  { id: 'selected', title: 'Spend your gold', text: 'You earned gold. Tap your Archer on the map to see its upgrades.' },
+  { id: 'upgraded', title: 'Make it stronger', text: 'Buy an upgrade. Each tower can follow 2 of its 3 paths.' },
+  { id: 'read', title: 'Plan ahead', text: 'Next Wave shows what is coming. A ★ marks a tower that counters it. Add more towers and have fun!' },
 ];
 let tutStep = -1;
+let tutSpot: { x: number; y: number } | null = null;
 function tut(evId: string) {
   if (tutStep < 0 || tutStep >= TUT.length) return;
   if (TUT[tutStep].id === evId) { tutStep++; renderCoach(); }
-  if (evId === 'wave' && tutStep < TUT.length) { tutStep = TUT.length; renderCoach(); } // started early: done
+}
+/** A good first spot: buildable ground that covers the most road. */
+function findTutSpot() {
+  const g = game!; let best: { x: number; y: number } | null = null, bv = -1;
+  for (let x = 60; x < WORLD_W - 60; x += 16) for (let y = 60; y < WORLD_H - 60; y += 16) {
+    if (!g.canPlace(x, y, 24)) continue;
+    let v = 0; for (const p of g.paths) for (let i = 0; i < p.pts.length; i += 2) if (Math.hypot(p.pts[i].x - x, p.pts[i].y - y) < 115) v++;
+    if (v > bv) { bv = v; best = { x, y }; }
+  }
+  return best;
 }
 function renderCoach() {
   if (tutStep >= TUT.length) { profile.tutorialDone = true; saveProfile(profile); tutStep = -1; }
-  if (tutStep < 0) { coach.classList.remove('on'); coach.innerHTML = ''; return; }
+  if (tutStep < 0) { coach.classList.remove('on'); coach.innerHTML = ''; document.querySelectorAll('.tut-pulse').forEach((e) => e.classList.remove('tut-pulse')); return; }
   const s = TUT[tutStep];
-  coach.innerHTML = `<div class="cc"><div class="cc-n">${tutStep + 1}/${TUT.length}</div><div class="cc-t"><b>${esc(s.title)}</b><span>${esc(s.text)}</span></div><div class="cc-b">${s.id === 'read' ? '<button class="btn3d gilt" data-c="next">Got it</button>' : ''}<button class="btn3d woodb" data-c="skip">Skip</button></div></div>`;
+  coach.innerHTML = `<div class="cc"><div class="cc-n">${tutStep + 1}/${TUT.length}</div><div class="cc-t"><b>${esc(s.title)}</b><span>${esc(s.text)}</span></div><div class="cc-b">${s.id === 'read' ? '<button class="btn3d gilt" data-c="next">Got it</button>' : '<button class="btn3d woodb" data-c="skip">Skip</button>'}</div></div>`;
   coach.classList.add('on');
+  document.querySelectorAll('.tut-pulse').forEach((e) => e.classList.remove('tut-pulse'));
+  if (s.pulse) document.querySelector(s.pulse)?.classList.add('tut-pulse');
 }
-coach.addEventListener('pointerdown', (ev) => {
+coach.addEventListener('click', (ev) => {
   const el = (ev.target as HTMLElement).closest('[data-c]') as HTMLElement | null;
   if (!el) return;
   ev.stopPropagation(); audio.play('click');
@@ -728,6 +751,7 @@ function onWaveEnd(round: number) {
   saveProfile(profile);
   if (game.state === 'build') saveRun(game);
   panelKey = '';
+  tut('waveEnd');
   // the auto-start countdown is handled by the main loop in game time (pausing holds it; turning Auto off cancels it)
   const wi = waveInfo(round + 1);
   if (game.state === 'build' && !wi.freeplay) { const big = wi.threats.find((t) => t.danger); if (big) toast(`Next: ${big.tag}. Check Details`, 'bad'); }
@@ -899,7 +923,7 @@ function toggleFullscreen() {
 const menu = $('#menuBody');
 const menuWrap = $('#menu');
 let menuScreen = 'main';
-const pick = { map: profile.lastMap ?? 'meadow', diff: (profile.lastDiff ?? 'medium') as Difficulty, hero: profile.lastHero };
+const pick = { map: profile.lastMap ?? 'meadow', diff: (profile.lastDiff ?? (profile.totalRounds === 0 ? 'easy' : 'medium')) as Difficulty, hero: profile.lastHero };
 if (!mapUnlocked(profile, pick.map)) pick.map = 'meadow';
 if (!heroUnlocked(profile, pick.hero)) pick.hero = 'aldric';
 
@@ -947,6 +971,7 @@ function showMenu(screen: 'main' | 'play' | 'tree' | 'settings' | 'how' | 'shop'
       ${tog('music', 'Music', st.music)}
       <label class="slider"><span>Music volume</span><input type="range" min="0" max="100" value="${Math.round(st.musicVol * 100)}" data-s="musicVol"></label>
       ${tog('auto', 'Auto-start waves', st.autoStart)}
+      ${tog('advisor', 'Advisor tips (★ suggested tower)', st.advisor)}
       <button class="toggle btn3d woodb" data-g="quality"><span>Graphics</span><span>${st.quality === 'high' ? 'HIGH' : 'LOW (battery saver)'}</span></button>
       ${document.fullscreenEnabled ? `<button class="toggle btn3d woodb" data-g="full"><span>Fullscreen</span><span>${document.fullscreenElement ? 'ON' : 'OFF'}</span></button>` : ''}
       <button class="toggle btn3d woodb" data-g="tutorial"><span>Replay tutorial</span><span>${profile.tutorialDone ? 'NEXT GAME' : 'ON'}</span></button>
@@ -1053,6 +1078,7 @@ menu.addEventListener('click', (ev) => {
     case 'sfx': profile.settings.sfx = !profile.settings.sfx; audio.setSfx(profile.settings.sfx); saveProfile(profile); showMenu('settings'); break;
     case 'music': profile.settings.music = !profile.settings.music; audio.setMusic(profile.settings.music); saveProfile(profile); showMenu('settings'); break;
     case 'auto': profile.settings.autoStart = !profile.settings.autoStart; saveProfile(profile); showMenu('settings'); break;
+    case 'advisor': profile.settings.advisor = !profile.settings.advisor; saveProfile(profile); showMenu('settings'); break;
     case 'quality': profile.settings.quality = profile.settings.quality === 'high' ? 'low' : 'high'; saveProfile(profile); showMenu('settings'); break;
     case 'full': toggleFullscreen(); setTimeout(() => showMenu('settings'), 200); break;
     case 'tutorial': profile.tutorialDone = false; saveProfile(profile); showMenu('settings'); break;
@@ -1086,8 +1112,10 @@ function beginSession() {
   selected = null; placing = null; ghost = undefined; armedSpell = null; rallyEdit = null; drag = null;
   panelKey = ''; abilKey = ''; lastTop = ''; waveKey = ''; hudKey = ''; endHandled = false; paused = false; autoT = null;
   battleShards = 0;
+  tutSpot = null;
   tutStep = !profile.tutorialDone && game && game.round === 0 ? 0 : -1;
-  renderCoach();
+  if (tutStep === 0 && game) tutSpot = findTutSpot();
+  renderSide(); renderCoach();
   requestAnimationFrame(layout);
 }
 
@@ -1163,13 +1191,13 @@ function frame(now: number) {
     if (placing && ghost) updateGhost(ghost);
     const rt = rallyEdit ?? (selected?.stats.barracks ? selected : null);
     const rp = rt ? game.rallyPos(rt) : null;
-    renderer.draw(game, { ghost, selected, targeting: !!armedSpell, cursor, rally: rt && rp ? { tx: rt.x, ty: rt.y, r: Game.RALLY_RANGE, x: rp.x, y: rp.y, editing: !!rallyEdit } : null });
+    renderer.draw(game, { ghost, selected, targeting: !!armedSpell, cursor, hint: tutStep === 0 ? tutSpot : null, rally: rt && rp ? { tx: rt.x, ty: rt.y, r: Game.RALLY_RANGE, x: rp.x, y: rp.y, editing: !!rallyEdit } : null });
     refreshTop();
     renderWaveBox();
     renderSide();
     renderHud();
     renderAbil();
-    $('#field').classList.toggle('coach-hide', !!(placing || armedSpell || rallyEdit));
+    { const busy = !!(placing || armedSpell || rallyEdit); $('#field').classList.toggle('coach-hide', busy); side.classList.toggle('coach-hide', busy); }
   }
   requestAnimationFrame(frame);
 }

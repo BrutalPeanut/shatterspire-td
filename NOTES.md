@@ -1,13 +1,51 @@
 # Handoff notes
 
-## >>> PICK UP HERE (end of 2026-11-15, after PR #3)
-1. PR #3 (`playtest-overhaul`, which included `audio-enemies-labels`) was merged 2026-11-15 and Pages deployed green.
-2. GitHub is signed in inside the **built-in browser** (Claude desktop app pane). Use it for PRs; Chrome is signed out. Brian prefers the built-in browser.
-3. Play link: https://brutalpeanut.github.io/shatterspire-td/?unlockall (artifact copy: https://claude.ai/artifact/VwzxiE8yFLsDbxp2C9VpWT#unlockall).
-4. Open threads:
-   - Not reproduced, so watch in playtests: Reinforce "no feedback at 184 lives" and Lyra Chrono Field "showing at Lv 6". Both now have explicit feedback and unit tests (see below).
-   - Medium Ember (bot dies w30) / Summit (bot dies w30, was w40 before wave 26/28 respacing) and Hard. Is that intended? Brian decides.
-   - Desktop headless fps with ~28 towers at 3x is ~36 (no regression vs the old build at 88 towers: 17 vs 16.5). Real hardware is faster, but check on a phone.
+## >>> PICK UP HERE (2026-11-16, after the vault / map-first / onboarding PR)
+**Owner direction (Brian), in priority order:**
+1. The map is the main focus; Bloons TD 6 is the layout template. Nothing instructional may cover the map.
+2. A casual first-time player (his girlfriend) must understand and enjoy the first game. Don't remove core mechanics to get there.
+3. He likes the Idle Cat Gunner "diamond auto-collect" loop (1/min up to a cap; he paid to raise the cap to 500). Shatterspire's version is the Shard Vault.
+4. "Use any open source repos to make this game the best it can be."
+5. Workflow: every change via a PR you open and merge yourself (GitHub is signed in in the **built-in browser** of the Claude desktop app, not Chrome). Ship when tests pass, tell him after, always give the play link: https://brutalpeanut.github.io/shatterspire-td/?unlockall (normal players: no `?unlockall`).
+
+**Unfinished work: branch `design-pass` (pushed, NOT merged, balance not final).** It was interrupted by newer requests. It branches from main at 0881fcd, so rebase it onto main first (conflicts are likely in game.ts and unit.ts). What it holds:
+- `test/strategies.ts`: five rule-based strategies (wide, tall, eco, control, support) across maps and difficulties. `DETAIL=1 npx tsx test/strategies.ts all medium` prints leak waves; `RunResult.tension` is how far the lead enemy got each wave (% of road), which is the best pacing metric we have.
+- `src/core/delta.ts`: `upgradeDelta(def, tiers, path)` returns what an upgrade really changes, computed from stats (e.g. "Damage 3→6 · Speed 1.1→1.5/s · NEW: can hurt Ironclads"). All 150 upgrades produce a non-empty delta. **Not wired into the UI yet.** Wire it into the upgrade buttons in `towerPanel()` and the info sheet (a small line under each description).
+- Shatter-through (in `Game.damage`): overkill damage left after breaking a layer is shared between every child it splits into (`Game.SHATTER_CARRY`, 1 = all of it). Plus a `shatter` event and "SHATTER ×N" text when one hit breaks 6+/10+ layers. This is the proposed identity mechanic. It makes big hits and Meteor Shower noticeably stronger, so late waves need more pressure.
+- Boss crack points (`EnemyDef.cracks`): at 66/33% (dragon 75/50/25%) of its shell a boss staggers 1.5s and sheds minions behind it; bosses no longer spill children on death, so killing the boss ends its threat. Dragon's timed behemoth spawn became 2 hydras every 9s.
+- `Enemy.born` (road fraction where it appeared), `waveLeaks[].late`, `Game.bossLeak`, `Tower.blocked` (immune hits by enemy name), an `immune` event and floating "IMMUNE" text.
+- Waves 1-2 respaced; waves 31-40 counts raised about 15-20% to offset shatter-through. **This last tuning was applied but never measured.**
+
+Baseline findings on main, before those changes (simulation, one seed, bots have no perks):
+- Easy: every strategy wins every map except `wide` on Ember.
+- Medium: `tall` and `support` win all four maps; `eco` wins two; `wide` and `control` lose on all four (wave 40 on every map except `wide` on Summit, wave 30).
+- Hard: only `support` wins (three maps).
+- Cheap tower spam does NOT dominate specialised builds, so no tower caps are needed.
+- Wave-40 losses were not the dragon leaking. They were behemoths the dragon spawned or spilled near the exit. Where a giant breaks decides where its children start, and nothing told the player that. It is the key lesson to teach.
+- Waves 1-5 have almost no tension (lead enemy reaches about 11% of the road).
+- Text audit: descriptions match mechanics, with two exceptions: heroes do not level "every wave" (XP is 60+10×wave, about a level every 2-3 waves, level 10 near wave 27), and a base Gold Mine pays back in about 13 waves, not 10. **Both strings are still wrong on main** (`GROUPS` hero text and the mine entry in `src/ui/towerInfo.ts`, plus the hero info sheet in main.ts).
+- With shatter-through and cracks on (before the +15-20% wave bump), Medium Meadowbrook became flawless for all four strategies run on it (tall, support, control, wide), which is too easy; hence the bump.
+
+Next steps for `design-pass`, in order:
+1. Rebase, run `npx tsx test/unit.ts`, then the strategy matrix on easy/medium/hard. Target on Medium: strong builds win with some losses, `wide` loses late or scrapes by, and tension in waves 31-39 reaches 75-95% so wave 40 is not the first hard wave. Keep Easy winnable by all five; keep Hard hard.
+2. If balance will not settle quickly, set `SHATTER_CARRY = 0.75` (roughly neutral versus the old first-child-only rule) and revert the wave 31-40 bumps.
+3. Wire `upgradeDelta` into the UI; fix the two wrong strings; show `Tower.blocked` in the tower panel ("37 hits bounced off Ironclads").
+4. Teach "break giants early": a Tower Guide line, and a defeat-recap cause that uses `waveLeaks[].late` and `bossLeak.hpFrac`.
+5. Combat feel: distinct sounds for the `immune`, `shatter` and `crack` events (audio.ts has no handlers for them yet), a bigger burst when a giant splits, notches on the boss bar for crack points, respect `prefers-reduced-motion`.
+6. Move toasts off the map (render them over the side-panel info slot).
+
+**Open-source options not yet used (workspace network reaches only npm and GitHub):**
+- Kenney asset packs (CC0, mirrored on GitHub and npm) for UI sounds and impact SFX; would beat the synthesised effects for hits and coins.
+- `howler` (MIT) only if sampled audio is added.
+- `@tweenjs/tween.js` or `motion` (MIT) for UI and number animations; `canvas-confetti` (ISC) for victory.
+- `seedrandom` is unnecessary (a mulberry RNG is built in). Avoid a full engine swap (Phaser/Pixi): rendering is a custom canvas and performs fine.
+
+### Shard Vault, map-first layout, casual onboarding (2026-11-16)
+- **Shard Vault** (`src/core/vault.ts`, pure and unit-tested with a fake clock): 1 Shard per real minute, even offline, up to a cap (100, then 250 for 150 Shards, then 500 for 400). Collect from the main menu. Shards buy Powers (80-120) in the Shard Shop or with the "+1" buttons in the in-battle Powers menu. Also earned by play: 1 per wave, 5 per boss wave, 25 per victory. New and existing profiles find 50 waiting. Max 3 Powers per battle (`Game.powersUsed`, saved). There are no real-money purchases; the cap upgrade is the natural paid item if a store build ever happens. The clock is the device clock, so it can be cheated; fine for now.
+- **Map-first layout:** in landscape (phones and desktop) `#game` is a grid: the map takes the full height and a right rail holds stats, the four controls, the info slot and the Armory (`display: contents` on `#main`). Rail: 204px on landscape phones (icon + price cards), 264px, or 300px on big screens. Portrait keeps map on top, spells strip, panel below.
+- **Onboarding:** a brand-new profile defaults to Easy. The 6-step coach lives in the side panel, pulses its target (`.tut-pulse`) and shows a glowing suggested build spot on the map (`Overlay.hint`). Steps advance on real events: placed, wave, waveEnd, selected, upgraded, read.
+- **Advisor** (`recommendTower` in analysis.ts): before each wave it stars one Armory card and adds a gold chip in the Next Wave box when the defense lacks something concrete (nothing can hurt an immune enemy, no True Sight, no giant killer, no crowd damage, no control). Setting: "Advisor tips".
+- **Touch click-through rule:** on touch, a `pointerdown` handler that swaps the UI is followed by a click at the same spot, which presses whatever is now under the finger. This used to burn a Power when opening the Powers menu, and opened Wave details after Cancel or Skip. Use `click` for buttons that change the UI under them; `modal()` also swallows the one click that follows a touch-opened modal.
 
 ### Playtest overhaul (2026-11-15): what changed and the rules it set
 - **Setup screen:** one screen, Begin Battle pinned in a footer with a summary; 2x2 map grid on phones, 2-column layout in landscape. Fits 375x667 / 740x360 / desktop with no scrolling (UI test checks this).

@@ -11,7 +11,7 @@ export interface Profile {
   medals: Record<string, Partial<Record<Difficulty | 'freeplay', number>>>; // value = 1 for medal, freeplay = best round
   perks: string[];
   powers: Record<string, number>;
-  settings: { sfx: boolean; music: boolean; autoStart: boolean; sfxVol: number; musicVol: number; quality: 'high' | 'low' };
+  settings: { sfx: boolean; music: boolean; autoStart: boolean; sfxVol: number; musicVol: number; quality: 'high' | 'low'; advisor: boolean };
   /** Shard wallet and vault (see core/vault.ts). vaultSince = when the vault last started filling (ms). */
   shards: number; vaultLevel: number; vaultSince: number;
   /** First-run tutorial finished or dismissed. */
@@ -30,7 +30,7 @@ function safeSet(k: string, v: string) { try { localStorage.setItem(k, v); } cat
 function safeDel(k: string) { try { localStorage.removeItem(k); } catch { /* ignore */ } }
 
 export function loadProfile(): Profile {
-  const def: Profile = { v: 1, totalRounds: 0, medals: {}, perks: [], powers: { chest: 1, draught: 1 }, settings: { sfx: true, music: true, autoStart: false, sfxVol: 0.8, musicVol: 0.7, quality: 'high' }, lastHero: 'aldric', tutorialDone: false,
+  const def: Profile = { v: 1, totalRounds: 0, medals: {}, perks: [], powers: { chest: 1, draught: 1 }, settings: { sfx: true, music: true, autoStart: false, sfxVol: 0.8, musicVol: 0.7, quality: 'high', advisor: true }, lastHero: 'aldric', tutorialDone: false,
     shards: 0, vaultLevel: 0, vaultSince: Date.now() - 50 * 60_000 }; // new and returning players find 50 shards waiting
   const raw = safeGet(KEY);
   if (!raw) return def;

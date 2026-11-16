@@ -153,6 +153,19 @@ for (const m of MAPS) {
   ok(g2.state === 'over' && rc2.tips.length > 0 && rc2.cause.length > 10, `empty defense on w26 gets a cause: "${rc2.cause}"`);
 }
 
+// ---- advisor suggests a real counter
+{
+  const { recommendTower } = await import('../src/core/analysis');
+  const g = fresh(); g.gold = 1e6;
+  ok(recommendTower(g, 1)?.tower === 'archer', 'no towers -> Archer');
+  for (let i = 0; i < 3; i++) { const s = findSpot(g); g.placeTower('archer', s.x, s.y); }
+  ok(recommendTower(g, 21)?.tower === 'mage', 'archers only vs wave 21 Ironclads -> Fire Mage');
+  const s1 = findSpot(g); g.placeTower('mage', s1.x, s1.y);
+  ok(recommendTower(g, 21)?.tower !== 'mage', 'once a Mage is built the Ironclad warning goes away');
+  ok(recommendTower(g, 26)?.tower === 'ballista', 'first giant with no Ballista -> Ballista');
+  ok(recommendTower(g, 17)?.tower === 'archer' && /Eagle Eye/.test(recommendTower(g, 17)!.why), 'shadowed wave without True Sight -> Eagle Eye tip');
+}
+
 // ---- Shard Vault: 1 per minute, capped, partial minutes kept, upgrades, clock safety
 {
   const V = await import('../src/core/vault');
