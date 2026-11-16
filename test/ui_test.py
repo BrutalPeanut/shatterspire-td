@@ -169,6 +169,53 @@ with sync_playwright() as p:
     check(errs == [], f'no page errors {errs}')
     ctx.close()
 
+    # ------------------------------------------------ Shard Vault
+    print('shard vault')
+    ctx = b.new_context(viewport={'width': 390, 'height': 844}, is_mobile=True, has_touch=True, device_scale_factor=2); pg = ctx.new_page(); errs = []
+    pg.on('pageerror', lambda e: errs.append(str(e)))
+    pg.goto(BASE + '&t=v1'); pg.wait_for_timeout(600)
+    PROF = "JSON.parse(localStorage.getItem('shatterspire.profile.v1'))"
+    check('50 / 100' in pg.inner_text('#vaultw'), 'a new player finds 50 Shards waiting in the vault')
+    pg.tap('[data-g="collect"]'); pg.wait_for_timeout(150)
+    check(pg.evaluate(PROF + '.shards') == 50 and '0 / 100' in pg.inner_text('#vaultw'), 'Collect moves them to the wallet and empties the vault')
+    pg.tap('[data-g="collect"]'); pg.wait_for_timeout(100)
+    check(pg.evaluate(PROF + '.shards') == 50, 'collecting an empty vault gives nothing')
+    # 8 hours later (rewind the fill time), the vault is full at its cap
+    pg.evaluate("(() => { const p = " + PROF + "; p.vaultSince = Date.now() - 8 * 3600e3; p.shards = 500; localStorage.setItem('shatterspire.profile.v1', JSON.stringify(p)); })()")
+    pg.reload(); pg.wait_for_timeout(600)
+    check('100 / 100' in pg.inner_text('#vaultw') and pg.locator('.vault.full').count() == 1, 'after 8 hours away the vault is full at 100, not more')
+    pg.tap('[data-g="shop"]'); pg.wait_for_timeout(150)
+    pg.tap('[data-g="vaultup"]'); pg.wait_for_timeout(150)
+    check(pg.evaluate(PROF + '.vaultLevel') == 1 and pg.evaluate(PROF + '.shards') == 350 and '100 / 250' in pg.inner_text('#vaultw'), 'vault upgrade: costs 150, cap 250, contents kept')
+    own = pg.evaluate(PROF + '.powers.dragonfire || 0')
+    pg.tap('[data-g="buypower:dragonfire"]'); pg.wait_for_timeout(150)
+    check(pg.evaluate(PROF + '.powers.dragonfire') == own + 1 and pg.evaluate(PROF + '.shards') == 230, 'buying a Power spends Shards')
+    sw = pg.evaluate('document.documentElement.scrollWidth'); check(sw <= 390, f'shop fits the phone width ({sw})')
+    # in battle: buy from the Powers menu, and the 3-per-battle cap
+    pg.tap('[data-g="main"]'); pg.tap('[data-g="play"]'); pg.tap('.su-go'); pg.wait_for_timeout(500)
+    if pg.locator('#coach.on [data-c="skip"]').count(): pg.tap('#coach [data-c="skip"]')
+    pg.tap('#abil [data-ab="p:powers:0"]'); pg.wait_for_timeout(350)
+    check(pg.locator('#modal.on').count() == 1, 'touch: tapping the Powers medallion opens the menu and it stays open')
+    pg.tap('[data-m="buypower:chest"]'); pg.wait_for_timeout(120)
+    check(pg.evaluate(PROF + '.shards') == 150 and pg.locator('#modal.on').count() == 1, 'Powers menu: +1 buys with Shards and stays open')
+    def open_powers():
+        for _ in range(4):
+            if pg.locator('#modal.on').count(): return
+            pg.wait_for_timeout(250); pg.tap('#abil [data-ab="p:powers:0"]'); pg.wait_for_timeout(200)
+    for i in range(3):
+        open_powers()
+        if i: pg.tap('[data-m="buypower:chest"]'); pg.wait_for_timeout(120)
+        pg.tap('[data-m="power:chest"]'); pg.wait_for_timeout(200)
+    check(pg.evaluate('__ss.game.powersUsed') == 3, 'three Powers used')
+    open_powers()
+    check('per battle' in pg.inner_text('#modal'), 'fourth Power is blocked with the reason shown')
+    pg.tap('[data-m="resume"]')
+    sh = pg.evaluate(PROF + '.shards'); pg.tap('#startBtn'); pg.wait_for_timeout(150)
+    pg.evaluate("(() => { const g = __ss.game; g.queue.length = 0; g.enemies.length = 0; })()"); pg.wait_for_timeout(300)
+    check(pg.evaluate(PROF + '.shards') == sh + 1, 'clearing a wave earns 1 Shard')
+    check(errs == [], f'no page errors {errs}')
+    ctx.close()
+
     # ------------------------------------------------ defeat recap + retry wave
     print('defeat recap')
     ctx = b.new_context(viewport={'width': 1366, 'height': 768}); pg = ctx.new_page(); errs = []
@@ -241,6 +288,9 @@ with sync_playwright() as p:
     check(bb and bb['y'] + bb['height'] <= 667, 'Begin Battle visible without scrolling')
     pg.tap('.su-go'); pg.wait_for_timeout(500)
     check(pg.locator('#coach.on').count() == 1, 'first-run tutorial shows')
+    check(pg.evaluate('__ss.game.diff') == 'easy', 'a brand-new player starts on Easy by default')
+    check(pg.locator('.card.tut-pulse[data-v="archer"]').count() == 1 and pg.locator('.card.rec[data-v="archer"]').count() == 1, 'tutorial pulses the Archer and the advisor stars it')
+    check(pg.locator('#field #coach').count() == 0, 'the tutorial card is in the side panel, not over the map')
     cdp = ctx.new_cdp_session(pg)
     def touch(kind, x, y): cdp.send('Input.dispatchTouchEvent', {'type': kind, 'touchPoints': [] if kind == 'touchEnd' else [{'x': x, 'y': y}]})
     c = pg.locator('.card[data-v="archer"]').bounding_box(); s = pg.evaluate(FIND_SPOT, True)
@@ -260,7 +310,7 @@ with sync_playwright() as p:
         for i in range(1, 13): touch('touchMove', c['x'] + 25 + (s['x'] - c['x'] - 25) * i / 12, c['y'] + 25 + (fy - c['y'] - 25) * i / 12); pg.wait_for_timeout(16)
         touch('touchEnd', 0, 0); pg.wait_for_timeout(120)
         check(towers(pg) == n0 + 1, f'touch drag builds at the {label} edge of the map')
-    check(pg.locator('#coach.on').count() == 1 and '2/4' in pg.inner_text('#coach'), 'tutorial advanced to step 2')
+    check(pg.locator('#coach.on').count() == 1 and '2/6' in pg.inner_text('#coach') and pg.locator('#startBtn.tut-pulse').count() == 1, 'tutorial advanced to step 2 and points at Start')
     # tap-to-place on touch: tower lands where tapped (no lift)
     n0 = towers(pg); pg.tap('.card[data-v="knight"]'); s = pg.evaluate(FIND_SPOT, False)
     pg.touchscreen.tap(s['x'], s['y']); pg.wait_for_timeout(100)

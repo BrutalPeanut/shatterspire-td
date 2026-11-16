@@ -22,6 +22,7 @@ export const ICON = {
   pause: svg(`<rect x="7" y="5" width="7" height="22" rx="2" fill="#fff6d8" stroke="${O}" stroke-width="2"/><rect x="18" y="5" width="7" height="22" rx="2" fill="#fff6d8" stroke="${O}" stroke-width="2"/>`),
   flag: svg(`<path d="M8 29V4" stroke="${O}" stroke-width="3" stroke-linecap="round"/><path d="M9 5c5-2 9 2 16 0v11c-7 2-11-2-16 0z" fill="#3a86e0" stroke="${O}" stroke-width="2" stroke-linejoin="round"/>`),
   info: svg(`<circle cx="16" cy="16" r="12.5" fill="#3a86e0" stroke="${O}" stroke-width="2"/><circle cx="16" cy="10" r="2.2" fill="#fff"/><rect x="14" y="14" width="4" height="10" rx="1.5" fill="#fff"/>`),
+  shard: svg(`<defs><linearGradient id="sh" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#e8fbff"/><stop offset=".5" stop-color="#5ad0ff"/><stop offset="1" stop-color="#2a5ad8"/></linearGradient></defs><path d="M16 2l9 9-9 19-9-19z" fill="url(#sh)" stroke="${O}" stroke-width="2" stroke-linejoin="round"/><path d="M7 11h18M16 2l-3.5 9 3.5 19 3.5-19z" fill="none" stroke="#fff" stroke-opacity=".65" stroke-width="1.2"/>`),
   coinSmall: '',
 };
 ICON.coinSmall = ICON.coin.replace('class="ico"', 'class="ico sm"');

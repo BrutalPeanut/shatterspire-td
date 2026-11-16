@@ -153,5 +153,44 @@ for (const m of MAPS) {
   ok(g2.state === 'over' && rc2.tips.length > 0 && rc2.cause.length > 10, `empty defense on w26 gets a cause: "${rc2.cause}"`);
 }
 
+// ---- advisor suggests a real counter
+{
+  const { recommendTower } = await import('../src/core/analysis');
+  const g = fresh(); g.gold = 1e6;
+  ok(recommendTower(g, 1)?.tower === 'archer', 'no towers -> Archer');
+  for (let i = 0; i < 3; i++) { const s = findSpot(g); g.placeTower('archer', s.x, s.y); }
+  ok(recommendTower(g, 21)?.tower === 'mage', 'archers only vs wave 21 Ironclads -> Fire Mage');
+  const s1 = findSpot(g); g.placeTower('mage', s1.x, s1.y);
+  ok(recommendTower(g, 21)?.tower !== 'mage', 'once a Mage is built the Ironclad warning goes away');
+  ok(recommendTower(g, 26)?.tower === 'ballista', 'first giant with no Ballista -> Ballista');
+  ok(recommendTower(g, 17)?.tower === 'archer' && /Eagle Eye/.test(recommendTower(g, 17)!.why), 'shadowed wave without True Sight -> Eagle Eye tip');
+}
+
+// ---- Shard Vault: 1 per minute, capped, partial minutes kept, upgrades, clock safety
+{
+  const V = await import('../src/core/vault');
+  const MIN = 60_000, t0 = 1_000_000_000;
+  const s = { shards: 0, vaultLevel: 0, vaultSince: t0 };
+  ok(V.vaultStored(s, t0 + 37 * MIN + 59_000) === 37, '37m59s -> 37 shards');
+  ok(V.vaultStored(s, t0 + 9999 * MIN) === 100, 'capped at 100');
+  ok(V.vaultFullIn(s, t0 + 40 * MIN) === 60 * MIN && V.vaultFullIn(s, t0 + 500 * MIN) === 0, 'time to full');
+  ok(V.collectVault(s, t0 + 37 * MIN + 59_000) === 37 && s.shards === 37, 'collect moves shards to the wallet');
+  ok(V.vaultStored(s, t0 + 38 * MIN) === 1, 'partial minute carries over after collecting');
+  ok(V.collectVault(s, t0 + 38 * MIN + 1000) === 1 && V.collectVault(s, t0 + 38 * MIN + 2000) === 0, 'cannot double-collect');
+  ok(V.collectVault(s, t0 + 9999 * MIN) === 100 && V.vaultStored(s, t0 + 9999 * MIN) === 0, 'full vault: time past the cap is not banked');
+  ok(V.vaultStored(s, t0 - 5 * MIN) === 0 && V.collectVault(s, t0 - 5 * MIN) === 0, 'clock set backwards gives nothing');
+  s.shards = 149; ok(!V.upgradeVault(s, t0) && s.vaultLevel === 0, 'upgrade needs 150');
+  s.shards = 150; s.vaultSince = t0; const now = t0 + 300 * MIN;
+  ok(V.upgradeVault(s, now) && s.shards === 0 && V.vaultCap(s) === 250, 'upgrade to 250');
+  ok(V.vaultStored(s, now) === 100 && V.vaultStored(s, now + 150 * MIN) === 250, 'a full vault keeps its 100 after upgrading and resumes filling');
+  s.shards = 400; ok(V.upgradeVault(s, now) && V.vaultCap(s) === 500 && !V.upgradeVault(s, now), '500 is the top level');
+  ok(V.spendShards(s, 1) === false && s.shards === 0, 'cannot overspend');
+  ok(Object.keys(V.POWER_PRICE).length === 5, 'every power has a price');
+  // per-battle power cap, saved with the run
+  const g = fresh(); for (let i = 0; i < 3; i++) ok(g.usePower('chest'), `power ${i + 1} allowed`);
+  ok(/per battle/.test(g.powerBlock('chest') ?? '') && !g.usePower('chest'), '4th power in a battle is refused');
+  ok(Game.restore(g.serialize()).powersUsed === 3, 'power count survives save/restore');
+}
+
 console.log(`${passes} passed, ${fails} failed`);
 if (fails) process.exit(1);

@@ -518,3 +518,85 @@ body.dragging, body.dragging * { cursor: grabbing !important; }
   #wavebox.slot .hb-x span { display: none; } #wavebox.slot .hb-btns .hb-x { width: 30px; padding: 0; }
   #wavebox.slot .hb-st { white-space: normal; line-height: 1.15; font-size: 11px; }
 }
+
+/* ---- Shard Vault + shop */
+.vault { width: min(380px, 94%); margin: 10px 0 2px; padding: 9px 11px 10px; border-radius: 14px; color: #f3e2b8; background: var(--stone); box-shadow: inset 0 0 0 2px var(--goldline), inset 0 0 0 3.5px var(--wood4), 0 5px 0 var(--wood4), 0 8px 14px rgba(0,0,0,0.45); }
+.vault.full { box-shadow: inset 0 0 0 2px #9fe8ff, inset 0 0 0 3.5px var(--wood4), 0 5px 0 var(--wood4), 0 0 18px 4px rgba(90,208,255,0.6); }
+.v-top { display: flex; align-items: center; gap: 8px; text-align: left; }
+.v-top > .ico { width: 30px; height: 30px; }
+.v-t { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.2; }
+.v-t b { font-family: 'Cinzel', serif; font-weight: 900; font-size: 15px; color: #fff3d0; text-shadow: 0 2px 0 #000; }
+.v-t span { font-size: 12px; font-weight: 800; color: #cfe6ff; }
+.v-wallet { display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px 3px 6px; border-radius: 999px; background: #1a1230; box-shadow: 0 0 0 1.5px #5ad0ff; font-family: 'Lilita One', sans-serif; font-size: 16px; color: #dff6ff; }
+.v-bar { position: relative; height: 20px; margin: 8px 0; border-radius: 10px; background: #1a1230; overflow: hidden; box-shadow: inset 0 2px 4px rgba(0,0,0,0.6), 0 0 0 1.5px var(--wood4); }
+.v-bar i { position: absolute; left: 0; top: 0; bottom: 0; background: linear-gradient(180deg, #9fe8ff, #2f8fe0); transition: width .4s; }
+.v-bar span { position: absolute; inset: 0; display: grid; place-items: center; font-family: 'Lilita One', sans-serif; font-size: 13px; color: #fff; text-shadow: 0 1px 0 #000, 0 0 3px #000; }
+.v-btns { display: flex; gap: 8px; } .v-btns button { flex: 1; min-height: 42px; font-size: 15px; border-radius: 11px; }
+.wallet { display: inline-flex; align-items: center; gap: 5px; margin: 0 auto 4px; padding: 4px 14px; border-radius: 999px; background: #1a1230; color: #dff6ff; box-shadow: 0 0 0 1.5px #5ad0ff; font-weight: 800; font-size: 14px; } .wallet b { font-family: 'Lilita One', sans-serif; font-weight: 400; font-size: 17px; }
+.pwrow { display: flex; gap: 6px; align-items: stretch; margin: 8px 0; } .pwrow .pw { margin: 0; flex: 1; min-width: 0; }
+.pwbuy { flex-shrink: 0; width: 64px; border-radius: 12px; display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 15px; line-height: 1.1; }
+.pwbuy span { display: inline-flex; align-items: center; gap: 2px; font-family: 'Lilita One', sans-serif; font-weight: 400; font-size: 13px; }
+.pc.price { display: inline-flex; align-items: center; gap: 3px; font-size: 17px; }
+.shop-panel { max-width: 520px; margin-top: 10px; padding: 12px 14px; } .shop-panel .pw { color: #fbe7b8; }
+@media (max-height: 520px) and (orientation: landscape) { .vault { margin: 4px 0 0; padding: 6px 10px 7px; } .v-bar { margin: 5px 0; height: 16px; } .v-btns button { min-height: 34px; } }
+
+/* ===================================================================
+   Map-first layout (Bloons-style): in landscape the battlefield takes the full height and
+   everything else lives in one slim rail on the right: stats, controls, next wave, towers.
+   =================================================================== */
+@media (orientation: landscape) {
+  #game.on { display: grid; grid-template-columns: minmax(0, 1fr) var(--rail); grid-template-rows: auto minmax(0, 1fr); --rail: 264px; }
+  #main { display: contents; }
+  #field { grid-column: 1; grid-row: 1 / span 2; padding: 0; }
+  #canvas { border-radius: 0; box-shadow: 0 0 0 2px var(--wood4), 0 0 0 4px var(--goldline); }
+  #topbar { grid-column: 2; grid-row: 1; flex-wrap: wrap; gap: 5px 4px; padding: 6px 6px 8px; border-left: 2px solid var(--wood4); box-shadow: inset 0 -2px 0 var(--goldline), inset 0 -4px 0 var(--wood4), inset 0 2px 0 rgba(255,255,255,0.15); }
+  #topbar .spacer { display: none; }
+  #topbar .stat { flex: 1 1 0; min-width: 0; justify-content: center; gap: 4px; padding: 2px 6px 2px 3px; font-size: 15px; }
+  #topbar .stat .ico { width: 18px; height: 18px; }
+  #topbar .stat .cap { font-size: 7.5px; letter-spacing: 0.06em; }
+  #topbar .tbtn { flex: 1 1 0; min-width: 0; height: 40px; padding: 0 2px; flex-direction: column; gap: 0; font-size: 11px; }
+  #topbar .tbtn .ico { width: 16px; height: 16px; }
+  #topbar .tl { align-items: center; } #topbar .tl .lbl2 { font-size: 10px; } #topbar .tl .lbl3 { display: block; font-size: 10px; line-height: 1; }
+  #topbar #startBtn { flex: 1.5 1 0; min-width: 0; padding: 0 2px; font-size: 12px; }
+  #side { grid-column: 2; grid-row: 2; width: auto; border-left: 2px solid var(--wood4); padding: 8px 8px; }
+  .shop { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .card img { width: 46px; height: 46px; }
+}
+@media (orientation: landscape) and (min-width: 1100px) and (min-height: 620px) { #game.on { --rail: 300px; } .card img { width: 52px; height: 52px; } #topbar .stat { font-size: 17px; } }
+/* landscape phones: icon-and-price cards so the rail stays slim and the map gets the room */
+@media (orientation: landscape) and (max-height: 460px) {
+  #game.on { --rail: 204px; }
+  #topbar { padding: 3px 4px 6px; gap: 3px; }
+  #topbar .stat { font-size: 13px; padding: 1px 4px 1px 2px; box-shadow: inset 0 2px 4px rgba(0,0,0,0.6), 0 0 0 1.5px var(--goldline); }
+  #topbar .stat .cap { display: none; } #topbar .stat .ico { width: 14px; height: 14px; }
+  #topbar .tbtn { height: 36px; }
+  #side { padding: 5px 5px; gap: 4px; }
+  .shop { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px 3px; }
+  .card { padding: 2px 1px 3px; } .card img { width: 36px; height: 36px; }
+  .card .nm, .card .role { display: none; }
+  .card .cost { font-size: 11.5px; padding: 0 5px 0 2px; margin-top: 0; }
+  .grp { padding: 0 2px 2px; } .grp-h { margin: 0 -2px 2px; padding: 1px 5px; } .grp-h b { font-size: 8px; }
+  .wb { height: 52px; padding: 3px 6px; } .wb-h { font-size: 11.5px; } .wb-units { font-size: 10.5px; margin: 0 0 2px; } .wb-more span { display: none; }
+  #wavebox.slot .hb { height: 52px; }
+  .row { margin-top: 5px; gap: 4px; } .btn { padding: 6px 3px; font-size: 11px; }
+  #shopHint { display: none; }
+}
+/* portrait: slimmer chrome so the map sits right at the top */
+@media (orientation: portrait) { #field { padding: 3px 3px 78px; } #canvas { box-shadow: 0 0 0 2px var(--wood4), 0 0 0 4px var(--goldline); } }
+/* rail header: stats on one row, controls on the next */
+@media (orientation: landscape) {
+  #topbar .stat { flex: 1 1 calc(33.3% - 4px); }
+  #topbar .tbtn { flex: 1 1 calc(21% - 4px); }
+  #topbar #startBtn { flex: 1 1 calc(30% - 4px); }
+}
+/* the first-run coach sits in the side panel, never over the map */
+#coach { position: static; transform: none; width: 100%; flex: none; }
+#side.coach-hide #coach { display: none; }
+.cc { padding: 6px 7px; gap: 6px; } .cc-n { width: 26px; height: 26px; font-size: 10px; } .cc-b { flex-direction: column; gap: 4px; }
+@media (orientation: landscape) and (max-height: 460px) { .cc-t span { font-size: 10.5px; line-height: 1.2; } .cc-b button { padding: 4px 8px; } }
+
+/* ---- first-run coach targets + advisor star */
+.tut-pulse { animation: tutPulse 1s infinite; position: relative; z-index: 1; }
+@keyframes tutPulse { 50% { box-shadow: 0 0 0 4px #ffe27a, 0 0 22px 8px rgba(255,226,122,0.9); transform: scale(1.04); } }
+.card.rec::after { content: '★'; position: absolute; top: -5px; right: -4px; width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; font-size: 12px; line-height: 1; color: #4a2408; background: var(--gilt); box-shadow: 0 0 0 1.5px var(--wood4), 0 0 8px rgba(255,226,122,0.9); z-index: 2; }
+.rc-cause.advisor { background: linear-gradient(180deg, #f2c14a, #b8741a); color: #3a1a04; box-shadow: inset 0 0 0 1.5px rgba(255,255,255,0.4); }

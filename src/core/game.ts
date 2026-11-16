@@ -272,8 +272,12 @@ export class Game {
   rallyPos(t: Tower) { if (!t.rally) return null; const v = { x: 0, y: 0 }; pointAt(this.paths[t.rally.path], t.rally.d, v); return v; }
 
   /** Why a consumable power can't be used right now (null = usable). */
+  /** Powers used this battle (capped so bought Powers can't trivialise a run). */
+  powersUsed = 0;
+  static POWERS_PER_BATTLE = 3;
   powerBlock(id: string): string | null {
     if (this.state === 'over' || this.state === 'victory') return 'Battle is over';
+    if (this.powersUsed >= Game.POWERS_PER_BATTLE) return `Only ${Game.POWERS_PER_BATTLE} Powers per battle`;
     if (id === 'merc' && this.freeTower) return 'Your next tower is already free';
     if ((id === 'dragonfire' || id === 'hourglass') && !this.enemies.length) return 'Use it when enemies are on the field';
     return null;
@@ -288,6 +292,7 @@ export class Game {
       case 'hourglass': if (!this.enemies.length) return false; for (const e of this.enemies) if (!e.def.boss) e.stunT = Math.max(e.stunT, 8); break;
       default: return false;
     }
+    this.powersUsed++;
     this.events.push({ type: 'ability', id });
     return true;
   }
@@ -1024,7 +1029,7 @@ export class Game {
     return {
       v: 1, mapId: this.map.id, difficulty: this.diff, heroId: this.heroId, gold: this.gold, lives: this.lives, round: this.round, freeplay: this.freeplay,
       towers: this.towers.map((t) => ({ defId: t.isHero ? 'hero' : t.defId, x: t.x, y: t.y, tiers: t.tiers, targeting: t.targeting, spent: t.spent, pops: t.pops, bank: t.bank, xp: t.xp, dmg: t.dmg, kills: t.kills, assists: t.assists, rally: t.rally })),
-      spells: this.spells.map((s) => s.left),
+      spells: this.spells.map((s) => s.left), powersUsed: this.powersUsed,
     };
   }
   static restore(data: ReturnType<Game['serialize']>, perks?: string[]): Game {
@@ -1039,6 +1044,7 @@ export class Game {
     }
     g.gold = data.gold; g.lives = data.lives; g.round = data.round; g.freeplay = data.freeplay;
     data.spells.forEach((l, i) => { if (g.spells[i]) g.spells[i].left = l; });
+    g.powersUsed = data.powersUsed ?? 0;
     g.events.length = 0;
     return g;
   }

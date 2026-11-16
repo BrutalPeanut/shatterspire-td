@@ -9,6 +9,8 @@ import { drawEnemyModel, enemyHeight } from './enemyArt';
 
 export interface Overlay {
   ghost?: { defId: string; x: number; y: number; valid: boolean; radius: number; range: number; reason?: string | null; deploy?: { x: number; y: number } | null };
+  /** Tutorial: a suggested build spot (pulsing ring on the grass). */
+  hint?: { x: number; y: number } | null;
   /** Barracks rally editing: reach circle around the tower + current flag. */
   rally?: { tx: number; ty: number; r: number; x: number; y: number; editing: boolean } | null;
   selected?: Tower | null;
@@ -139,6 +141,13 @@ export class Renderer {
       c.globalAlpha = 0.75;
       this.drawTowerBody(c, gh.defId === 'hero' ? g.heroId : gh.defId, gh.defId === 'hero', gh.x, gh.y, -0.3, time, [0, 0, 0], 0, 1, MAP_SCALE);
       c.globalAlpha = 1;
+    }
+    if (ov.hint && !ov.ghost) {
+      const k = 0.5 + 0.5 * Math.sin(time * 5);
+      c.save(); c.strokeStyle = `rgba(255,226,122,${0.55 + 0.4 * k})`; c.lineWidth = 4; c.setLineDash([9, 7]); c.lineDashOffset = -time * 30;
+      c.beginPath(); c.arc(ov.hint.x, ov.hint.y, 24 + 3 * k, 0, TAU); c.stroke(); c.setLineDash([]);
+      c.fillStyle = `rgba(255,226,122,${0.18 + 0.12 * k})`; c.beginPath(); c.arc(ov.hint.x, ov.hint.y, 22, 0, TAU); c.fill();
+      c.restore();
     }
     if (ov.ghost?.deploy) this.flag(c, ov.ghost.deploy.x, ov.ghost.deploy.y, ov.ghost.x, ov.ghost.y, time, ov.ghost.valid);
     if (ov.ghost && !ov.ghost.valid) {
