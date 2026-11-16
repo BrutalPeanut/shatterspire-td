@@ -1,4 +1,5 @@
 import type { WaveGroup } from './types';
+import { ENEMIES } from './enemies';
 import { rbe } from './enemies';
 
 const g = (type: string, count: number, spacing: number, delay = 0, mods = ''): WaveGroup => ({ type, count, spacing, delay, mods });
@@ -30,9 +31,9 @@ export const WAVES: WaveGroup[][] = [
   /* 23 */[g('orc', 20, 0.3, 0, 's'), g('iron', 8, 1, 4), g('hexling', 8, 0.6, 8)],
   /* 24 */[g('hydra', 15, 0.7)],
   /* 25 */[g('ogre', 30, 0.2), g('golem', 6, 1.2, 4)],
-  /* 26 */[g('golem', 10, 0.8), g('behemoth', 1, 1, 8)],
+  /* 26 */[g('golem', 10, 1.5), g('behemoth', 1, 1, 5)], // first giant. Same enemies as before, half the density (was 0.8s spacing)
   /* 27 */[g('wraith', 15, 0.5, 0, 's'), g('iron', 10, 0.8, 4)],
-  /* 28 */[g('golem', 12, 0.6), g('hydra', 10, 0.5, 4, 'r')],
+  /* 28 */[g('golem', 12, 1.0), g('hydra', 10, 0.8, 5, 'r')], // same enemies, less burst (was 0.6s / 0.5s)
   /* 29 */[g('wraith', 20, 0.3), g('behemoth', 2, 3, 6)],
   /* 30 */[g('golem', 10, 0.8), g('lich', 1, 1, 6)],
   /* 31 */[g('hydra', 30, 0.3), g('behemoth', 3, 2.5, 6)],
@@ -67,4 +68,56 @@ export function freeplayWave(round: number, rnd: () => number): WaveGroup[] {
   }
   if (round % 10 === 0) groups.push(g(round >= 60 ? 'dragon' : 'lich', 1, 1, delay));
   return groups;
+}
+
+// ---------------------------------------------------------------- wave preview (shown before a wave starts)
+
+export interface WaveInfo {
+  round: number; rbe: number; boss: boolean; giant: boolean; freeplay: boolean;
+  units: { type: string; name: string; count: number; mods: string; isNew: boolean }[];
+  threats: { tag: string; text: string; danger: boolean }[];
+  /** Lives lost if the single most valuable enemy leaks. */
+  worstLeak: number;
+}
+
+const COUNTER: Record<string, string> = {
+  blast: 'Explosions can\'t hurt them: use arrows, blades or magic',
+  sharp: 'Arrows and blades bounce off: use Cannon, Mage, Druid or Alchemist',
+  cold: 'Immune to frost: don\'t rely on Druid cold',
+  magic: 'Immune to magic: use arrows, cannons or soldiers',
+};
+const IMMUNE_NAME: Record<string, string> = { blast: 'blast', sharp: 'sharp', cold: 'cold', magic: 'magic' };
+
+export function waveInfo(round: number): WaveInfo {
+  const freeplay = round > WAVES.length;
+  const groups = freeplay ? [] : WAVES[round - 1];
+  const seen = new Set<string>();
+  for (let i = 0; i < Math.min(round - 1, WAVES.length); i++) for (const gr of WAVES[i]) seen.add(gr.type);
+  const units = groups.map((gr) => ({ type: gr.type, name: ENEMIES[gr.type].name, count: gr.count, mods: gr.mods ?? '', isNew: !seen.has(gr.type) }));
+  const threats: WaveInfo['threats'] = [];
+  let total = 0, worst = 0, giant = false, boss = false;
+  const imm = new Map<string, string[]>();
+  const modSeen = { s: false, r: false, f: false };
+  for (const u of units) {
+    const d = ENEMIES[u.type];
+    const r = rbe(u.type) * (u.mods.includes('f') ? 1.6 : 1);
+    total += r * u.count; worst = Math.max(worst, d.boss ? Infinity : Math.ceil(r));
+    if (d.giant && !d.boss) giant = true;
+    if (d.boss) boss = true;
+    // immunities of the unit AND of the layers it contains
+    const stack = [u.type];
+    while (stack.length) { const id = stack.pop()!; const ed = ENEMIES[id]; for (const i of ed.immune) { const l = imm.get(i) ?? []; if (!l.includes(ed.name)) l.push(ed.name); imm.set(i, l); } stack.push(...ed.children.filter((c) => ENEMIES[c].rank >= 6)); }
+    for (const m of ['s', 'r', 'f'] as const) if (u.mods.includes(m)) modSeen[m] = true;
+  }
+  if (boss) { const b = units.find((u) => ENEMIES[u.type].boss)!; threats.push({ tag: 'BOSS', text: `${b.name}: if it reaches the Spire you lose instantly. Save Meteor and abilities for it.`, danger: true }); }
+  for (const u of units) {
+    const d = ENEMIES[u.type];
+    if (d.giant && !d.boss) threats.push({ tag: u.isNew ? 'NEW GIANT' : 'GIANT', text: `${u.count}× ${d.name} (${Math.round(d.hp)} HP shell). One leak costs ~${Math.ceil(rbe(u.type) * (u.mods.includes('f') ? 1.6 : 1))} lives! Needs heavy single-target damage: Ballista, Cannon (Big Bombs), Mage.`, danger: true });
+  }
+  for (const [i, names] of imm) threats.push({ tag: `${IMMUNE_NAME[i].toUpperCase()}-PROOF`, text: `${names.join(', ')}: ${COUNTER[i]}`, danger: false });
+  if (modSeen.s) threats.push({ tag: 'SHADOWED', text: 'Invisible to towers without True Sight (Lyra, Archer Eagle Eye, Mage Arcane Sight, Ballista Spotter\'s Scope, Bard Songs of Insight).', danger: true });
+  if (modSeen.r) threats.push({ tag: 'REGROW', text: 'Damaged layers grow back over time. Kill them quickly.', danger: false });
+  if (modSeen.f) threats.push({ tag: 'FORTIFIED', text: 'Armored: extra HP on giants, golems and Ironclads.', danger: false });
+  for (const u of units) if (u.isNew && !ENEMIES[u.type].giant) threats.push({ tag: 'NEW', text: `First ${u.name} sighting.`, danger: false });
+  return { round, rbe: Math.round(total), boss, giant, freeplay, units, threats, worstLeak: worst };
 }

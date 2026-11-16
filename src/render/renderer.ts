@@ -8,7 +8,9 @@ import { drawAmbient, drawSpire, exitPoint, paintMap } from './mapArt';
 import { drawEnemyModel, enemyHeight } from './enemyArt';
 
 export interface Overlay {
-  ghost?: { defId: string; x: number; y: number; valid: boolean; radius: number; range: number };
+  ghost?: { defId: string; x: number; y: number; valid: boolean; radius: number; range: number; reason?: string | null; deploy?: { x: number; y: number } | null };
+  /** Barracks rally editing: reach circle around the tower + current flag. */
+  rally?: { tx: number; ty: number; r: number; x: number; y: number; editing: boolean } | null;
   selected?: Tower | null;
   targeting?: boolean; // meteor targeting cursor
   cursor?: { x: number; y: number } | null;
@@ -138,6 +140,22 @@ export class Renderer {
       this.drawTowerBody(c, gh.defId === 'hero' ? g.heroId : gh.defId, gh.defId === 'hero', gh.x, gh.y, -0.3, time, [0, 0, 0], 0, 1, MAP_SCALE);
       c.globalAlpha = 1;
     }
+    if (ov.ghost?.deploy) this.flag(c, ov.ghost.deploy.x, ov.ghost.deploy.y, ov.ghost.x, ov.ghost.y, time, ov.ghost.valid);
+    if (ov.ghost && !ov.ghost.valid) {
+      // a red X over the footprint so invalid spots read without colour too
+      const gh = ov.ghost, k = gh.radius * 0.7;
+      c.strokeStyle = 'rgba(255,60,50,0.95)'; c.lineWidth = 5; c.lineCap = 'round';
+      c.beginPath(); c.moveTo(gh.x - k, gh.y - k); c.lineTo(gh.x + k, gh.y + k); c.moveTo(gh.x + k, gh.y - k); c.lineTo(gh.x - k, gh.y + k); c.stroke();
+    }
+    if (ov.rally) {
+      const r = ov.rally;
+      c.save();
+      c.fillStyle = r.editing ? 'rgba(120,200,255,0.12)' : 'rgba(120,200,255,0.06)';
+      c.strokeStyle = r.editing ? 'rgba(160,220,255,0.9)' : 'rgba(160,220,255,0.45)'; c.lineWidth = 2.5; c.setLineDash([10, 7]);
+      c.beginPath(); c.arc(r.tx, r.ty, r.r, 0, TAU); c.fill(); c.stroke(); c.setLineDash([]);
+      c.restore();
+      this.flag(c, r.x, r.y, r.tx, r.ty, time, true);
+    }
     if (ov.targeting && ov.cursor) {
       c.strokeStyle = '#ff9a2a'; c.lineWidth = 3; c.setLineDash([8, 6]);
       c.beginPath(); c.arc(ov.cursor.x, ov.cursor.y, 95, 0, TAU); c.stroke(); c.setLineDash([]);
@@ -170,6 +188,19 @@ export class Renderer {
 
   roundRect(c: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
     c.beginPath(); c.moveTo(x + r, y); c.arcTo(x + w, y, x + w, y + h, r); c.arcTo(x + w, y + h, x, y + h, r); c.arcTo(x, y + h, x, y, r); c.arcTo(x, y, x + w, y, r); c.closePath();
+  }
+
+  /** Rally flag with a dotted tether back to its barracks. */
+  flag(c: CanvasRenderingContext2D, x: number, y: number, fx: number, fy: number, time: number, ok: boolean) {
+    c.save();
+    c.strokeStyle = ok ? 'rgba(255,240,200,0.7)' : 'rgba(255,90,80,0.7)'; c.lineWidth = 2; c.setLineDash([3, 6]);
+    c.beginPath(); c.moveTo(fx, fy); c.lineTo(x, y); c.stroke(); c.setLineDash([]);
+    c.fillStyle = 'rgba(0,0,0,0.3)'; c.beginPath(); c.ellipse(x, y + 2, 12, 5, 0, 0, TAU); c.fill();
+    c.strokeStyle = '#3a2008'; c.lineWidth = 3; c.beginPath(); c.moveTo(x, y + 2); c.lineTo(x, y - 30); c.stroke();
+    const w = Math.sin(time * 6) * 3;
+    c.fillStyle = ok ? '#2f7fd8' : '#c4302a'; c.strokeStyle = '#fff2b0'; c.lineWidth = 1.5;
+    c.beginPath(); c.moveTo(x, y - 30); c.quadraticCurveTo(x + 10, y - 30 + w, x + 20, y - 25); c.quadraticCurveTo(x + 10, y - 19 + w, x, y - 18); c.closePath(); c.fill(); c.stroke();
+    c.restore();
   }
 
   // ------------------------------------------------------------ enemies

@@ -28,9 +28,9 @@ export class Audio {
     // reverb
     this.verb = ctx.createConvolver(); this.verb.buffer = this.impulse(2.6, 2.8);
     const verbOut = ctx.createGain(); verbOut.gain.value = 0.9; this.verb.connect(verbOut); verbOut.connect(this.master);
-    this.sfx = ctx.createGain(); this.sfx.gain.value = this.sfxOn ? 0.75 : 0; this.sfx.connect(this.master);
+    this.sfx = ctx.createGain(); this.sfx.gain.value = this.sfxOn ? 0.75 * this.sfxVol : 0; this.sfx.connect(this.master);
     this.sfxVerb = ctx.createGain(); this.sfxVerb.gain.value = 0.22; this.sfx.connect(this.sfxVerb); this.sfxVerb.connect(this.verb);
-    this.music = ctx.createGain(); this.music.gain.value = this.musicOn ? 0.42 : 0; this.music.connect(this.master);
+    this.music = ctx.createGain(); this.music.gain.value = this.musicOn ? 0.42 * this.musicVol : 0; this.music.connect(this.master);
     this.musVerb = ctx.createGain(); this.musVerb.gain.value = 0.55; this.music.connect(this.musVerb); this.musVerb.connect(this.verb);
     this.drums = ctx.createGain(); this.drums.gain.value = 0; this.drums.connect(this.music);
     this.pad = ctx.createGain(); this.pad.gain.value = 1; this.pad.connect(this.music);
@@ -40,8 +40,11 @@ export class Audio {
     this.startMusic();
   }
 
-  setSfx(on: boolean) { this.sfxOn = on; if (this.ctx) this.sfx.gain.setTargetAtTime(on ? 0.75 : 0, this.ctx.currentTime, 0.05); }
-  setMusic(on: boolean) { this.musicOn = on; if (this.ctx) this.music.gain.setTargetAtTime(on ? 0.42 : 0, this.ctx.currentTime, 0.1); }
+  sfxVol = 1; musicVol = 1;
+  setSfx(on: boolean) { this.sfxOn = on; if (this.ctx) this.sfx.gain.setTargetAtTime(on ? 0.75 * this.sfxVol : 0, this.ctx.currentTime, 0.05); }
+  setMusic(on: boolean) { this.musicOn = on; if (this.ctx) this.music.gain.setTargetAtTime(on ? 0.42 * this.musicVol : 0, this.ctx.currentTime, 0.1); }
+  /** 0..1 volume sliders (independent of the on/off toggles). */
+  setVolumes(sfx: number, music: number) { this.sfxVol = sfx; this.musicVol = music; this.setSfx(this.sfxOn); this.setMusic(this.musicOn); }
   /** 0 = calm (build phase / menus), 1 = combat. */
   setIntensity(v: number) { this.targetIntensity = v; }
 
