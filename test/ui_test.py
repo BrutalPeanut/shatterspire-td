@@ -169,6 +169,53 @@ with sync_playwright() as p:
     check(errs == [], f'no page errors {errs}')
     ctx.close()
 
+    # ------------------------------------------------ Shard Vault
+    print('shard vault')
+    ctx = b.new_context(viewport={'width': 390, 'height': 844}, is_mobile=True, has_touch=True, device_scale_factor=2); pg = ctx.new_page(); errs = []
+    pg.on('pageerror', lambda e: errs.append(str(e)))
+    pg.goto(BASE + '&t=v1'); pg.wait_for_timeout(600)
+    PROF = "JSON.parse(localStorage.getItem('shatterspire.profile.v1'))"
+    check('50 / 100' in pg.inner_text('#vaultw'), 'a new player finds 50 Shards waiting in the vault')
+    pg.tap('[data-g="collect"]'); pg.wait_for_timeout(150)
+    check(pg.evaluate(PROF + '.shards') == 50 and '0 / 100' in pg.inner_text('#vaultw'), 'Collect moves them to the wallet and empties the vault')
+    pg.tap('[data-g="collect"]'); pg.wait_for_timeout(100)
+    check(pg.evaluate(PROF + '.shards') == 50, 'collecting an empty vault gives nothing')
+    # 8 hours later (rewind the fill time), the vault is full at its cap
+    pg.evaluate("(() => { const p = " + PROF + "; p.vaultSince = Date.now() - 8 * 3600e3; p.shards = 500; localStorage.setItem('shatterspire.profile.v1', JSON.stringify(p)); })()")
+    pg.reload(); pg.wait_for_timeout(600)
+    check('100 / 100' in pg.inner_text('#vaultw') and pg.locator('.vault.full').count() == 1, 'after 8 hours away the vault is full at 100, not more')
+    pg.tap('[data-g="shop"]'); pg.wait_for_timeout(150)
+    pg.tap('[data-g="vaultup"]'); pg.wait_for_timeout(150)
+    check(pg.evaluate(PROF + '.vaultLevel') == 1 and pg.evaluate(PROF + '.shards') == 350 and '100 / 250' in pg.inner_text('#vaultw'), 'vault upgrade: costs 150, cap 250, contents kept')
+    own = pg.evaluate(PROF + '.powers.dragonfire || 0')
+    pg.tap('[data-g="buypower:dragonfire"]'); pg.wait_for_timeout(150)
+    check(pg.evaluate(PROF + '.powers.dragonfire') == own + 1 and pg.evaluate(PROF + '.shards') == 230, 'buying a Power spends Shards')
+    sw = pg.evaluate('document.documentElement.scrollWidth'); check(sw <= 390, f'shop fits the phone width ({sw})')
+    # in battle: buy from the Powers menu, and the 3-per-battle cap
+    pg.tap('[data-g="main"]'); pg.tap('[data-g="play"]'); pg.tap('.su-go'); pg.wait_for_timeout(500)
+    if pg.locator('#coach.on [data-c="skip"]').count(): pg.tap('#coach [data-c="skip"]')
+    pg.tap('#abil [data-ab="p:powers:0"]'); pg.wait_for_timeout(350)
+    check(pg.locator('#modal.on').count() == 1, 'touch: tapping the Powers medallion opens the menu and it stays open')
+    pg.tap('[data-m="buypower:chest"]'); pg.wait_for_timeout(120)
+    check(pg.evaluate(PROF + '.shards') == 150 and pg.locator('#modal.on').count() == 1, 'Powers menu: +1 buys with Shards and stays open')
+    def open_powers():
+        for _ in range(4):
+            if pg.locator('#modal.on').count(): return
+            pg.wait_for_timeout(250); pg.tap('#abil [data-ab="p:powers:0"]'); pg.wait_for_timeout(200)
+    for i in range(3):
+        open_powers()
+        if i: pg.tap('[data-m="buypower:chest"]'); pg.wait_for_timeout(120)
+        pg.tap('[data-m="power:chest"]'); pg.wait_for_timeout(200)
+    check(pg.evaluate('__ss.game.powersUsed') == 3, 'three Powers used')
+    open_powers()
+    check('per battle' in pg.inner_text('#modal'), 'fourth Power is blocked with the reason shown')
+    pg.tap('[data-m="resume"]')
+    sh = pg.evaluate(PROF + '.shards'); pg.tap('#startBtn'); pg.wait_for_timeout(150)
+    pg.evaluate("(() => { const g = __ss.game; g.queue.length = 0; g.enemies.length = 0; })()"); pg.wait_for_timeout(300)
+    check(pg.evaluate(PROF + '.shards') == sh + 1, 'clearing a wave earns 1 Shard')
+    check(errs == [], f'no page errors {errs}')
+    ctx.close()
+
     # ------------------------------------------------ defeat recap + retry wave
     print('defeat recap')
     ctx = b.new_context(viewport={'width': 1366, 'height': 768}); pg = ctx.new_page(); errs = []

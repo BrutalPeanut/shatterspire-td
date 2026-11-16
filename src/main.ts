@@ -12,6 +12,7 @@ import { HEROES, HERO_MAP, HERO_XP } from './core/heroes';
 import { PERKS, POWERS, canBuyPerk, powersEarned } from './core/progress';
 import { waveInfo, type WaveInfo } from './core/waves';
 import { analyzeDefeat } from './core/analysis';
+import { POWER_PRICE, SHARDS_BOSS_WAVE, SHARDS_PER_WAVE, SHARDS_VICTORY, VAULT_LEVELS, collectVault, spendShards, upgradeVault, vaultCap, vaultFullIn, vaultStored } from './core/vault';
 import { WORLD_H, WORLD_W, type Difficulty, type Targeting } from './core/types';
 import { Renderer, type Overlay } from './render/renderer';
 import { drawEnemyModel } from './render/enemyArt';
@@ -720,6 +721,7 @@ function onWaveEnd(round: number) {
   audio.play('coin');
   const before = profile.totalRounds;
   profile.totalRounds++;
+  { const n = game.isBossWave(round) ? SHARDS_BOSS_WAVE : SHARDS_PER_WAVE; profile.shards += n; battleShards += n; }
   for (const t of TOWERS) if (before < t.unlockRounds && profile.totalRounds >= t.unlockRounds) toast(`🔓 New tower: ${t.name}!`, 'good');
   for (const h of HEROES) if (before < h.unlockRounds && profile.totalRounds >= h.unlockRounds) toast(`🔓 New hero: ${h.name}!`, 'good');
   if (game.freeplay) { const m = (profile.medals[game.map.id] ??= {}); m.freeplay = Math.max(m.freeplay ?? 0, round); }
@@ -733,6 +735,9 @@ function onWaveEnd(round: number) {
 
 /** Powers earned by a defeat are granted when the player leaves the run (not on Retry, so retries can't farm them). */
 let pendingPowers: string[] = [];
+/** Shards earned in the current battle (shown on the end screens). */
+let battleShards = 0;
+const SH = ICON.shard.replace('class="ico"', 'class="ico sm"');
 function grantPending() { for (const p of pendingPowers) profile.powers[p] = (profile.powers[p] ?? 0) + 1; if (pendingPowers.length) saveProfile(profile); pendingPowers = []; }
 let recapHtml = '';
 function onGameEnd(won: boolean) {
@@ -747,6 +752,7 @@ function onGameEnd(won: boolean) {
     .map((t) => `<li><b>${esc(t.isHero ? HERO_MAP[t.defId].name : TOWER_MAP[t.defId].name)}</b>: ${fmtShort(t.dmg)} damage</li>`).join('');
   if (won) {
     for (const p of earned) profile.powers[p] = (profile.powers[p] ?? 0) + 1;
+    profile.shards += SHARDS_VICTORY; battleShards += SHARDS_VICTORY;
     let medal = '';
     const m = (profile.medals[g.map.id] ??= {});
     if (!m[g.diff]) medal = `🏅 New medal: ${g.map.name} (${DIFF[g.diff].label})! +1 knowledge point`;
@@ -756,6 +762,7 @@ function onGameEnd(won: boolean) {
       <div class="hint">You held ${esc(g.map.name)} through all ${g.totalWaves} waves. Unspent gold: ${fmtShort(g.gold)}</div>
       ${top ? `<ul class="wlist">${top}</ul>` : ''}
       ${medal ? `<div class="hint" style="color:#a8680f">${medal}</div>` : ''}${earned.length ? `<div class="hint">Powers earned: ${pwIcons}</div>` : ''}
+      <div class="hint">${SH} <b>+${battleShards} Shards</b> earned this battle</div>
       <button class="mbtn big btn3d gilt" data-m="freeplay">Continue: Freeplay</button>
       <button class="mbtn btn3d woodb" data-m="restart">Restart</button>
       <button class="mbtn btn3d woodb" data-m="menu">Main Menu</button>`);
@@ -779,7 +786,7 @@ function onGameEnd(won: boolean) {
     ${canRetry ? `<button class="mbtn big btn3d gilt" data-m="retrywave">↻ Retry wave ${rc.round}</button><div class="hint rc-small">Restarts this wave with your defenses as they were before it began, so you can rebuild.</div>` : ''}
     <button class="mbtn btn3d woodb" data-m="restart">Restart map</button>
     <button class="mbtn btn3d woodb" data-m="menu">Main Menu</button>
-    ${earned.length ? `<div class="hint rc-small">Powers ${pwIcons} are yours when you leave this run.</div>` : ''}`;
+    <div class="hint rc-small">${SH} +${battleShards} Shards earned this battle.${earned.length ? ` Powers ${pwIcons} are yours when you leave this run.` : ''}</div>`;
   modal(recapHtml);
 }
 
@@ -796,10 +803,15 @@ function retryWave() {
 
 // ================================================================ modal + menus
 const modalEl = $('#modal');
-function modal(html: string) { modalEl.innerHTML = `<div class="scroll"><div class="mbox">${html}</div></div>`; modalEl.classList.add('on'); paused = true; lastTop = ''; }
+// A touch that opens a modal on pointerdown is followed by a click at the same spot. Swallow that one click, or it
+// presses whatever modal button is under the finger (this used to burn a Power by accident on phones).
+let lastTouchDown = -1e9, swallowClickUntil = 0;
+document.addEventListener('pointerdown', (e) => { swallowClickUntil = 0; if (e.pointerType !== 'mouse') lastTouchDown = performance.now(); }, true);
+function modal(html: string) { const now = performance.now(); swallowClickUntil = now - lastTouchDown < 80 ? now + 600 : 0; modalEl.innerHTML = `<div class="scroll"><div class="mbox">${html}</div></div>`; modalEl.classList.add('on'); paused = true; lastTop = ''; }
 function closeModal() { modalEl.classList.remove('on'); modalEl.innerHTML = ''; paused = false; lastTop = ''; }
 modalEl.addEventListener('click', (ev) => {
   const el = (ev.target as HTMLElement).closest('[data-m]') as HTMLElement | null;
+  if (performance.now() < swallowClickUntil) { swallowClickUntil = 0; return; }
   if (!el) { if (ev.target === modalEl && game && game.state !== 'over' && game.state !== 'victory') closeModal(); return; }
   audio.play('click');
   const m = el.dataset.m!;
@@ -814,10 +826,15 @@ modalEl.addEventListener('click', (ev) => {
   else if (m === 'sfx') { profile.settings.sfx = !profile.settings.sfx; audio.setSfx(profile.settings.sfx); saveProfile(profile); pauseMenu(); }
   else if (m === 'music') { profile.settings.music = !profile.settings.music; audio.setMusic(profile.settings.music); saveProfile(profile); pauseMenu(); }
   else if (m === 'full') { toggleFullscreen(); setTimeout(pauseMenu, 150); }
+  else if (m.startsWith('buypower:')) {
+    const id = m.slice(9), p = POWERS.find((x) => x.id === id)!, price = POWER_PRICE[id];
+    if (!spendShards(profile, price)) { audio.play('error'); toast(`${p.name} costs ${price} Shards (you have ${profile.shards})`, 'bad'); return; }
+    profile.powers[id] = (profile.powers[id] ?? 0) + 1; saveProfile(profile); audio.play('coin'); abilKey = ''; powersMenu();
+  }
   else if (m.startsWith('power:')) {
     const id = m.slice(6);
     const p = POWERS.find((x) => x.id === id)!;
-    if ((profile.powers[id] ?? 0) <= 0) { audio.play('error'); toast(`No ${p.name} left. Earn more by finishing games`, 'bad'); return; }
+    if ((profile.powers[id] ?? 0) <= 0) { audio.play('error'); toast(`No ${p.name} owned. Tap +1 to buy one with Shards`, 'bad'); return; }
     const err = game?.powerBlock(id);
     if (err) { audio.play('error'); toast(`${p.name}: ${err}`, 'bad'); return; }
     if (game && game.usePower(id)) { profile.powers[id]--; saveProfile(profile); audio.play('ability'); toast(`${p.name}: ${p.desc}`, 'good'); panelKey = ''; abilKey = ''; closeModal(); }
@@ -839,13 +856,40 @@ function pauseMenu() {
 }
 
 function powersMenu() {
+  const used = game?.powersUsed ?? 0;
   const rows = POWERS.map((p) => {
     const n = profile.powers[p.id] ?? 0;
-    const why = !n ? 'None left' : game?.powerBlock(p.id) ?? '';
-    return `<button class="pw btn3d woodb ${n && !why ? '' : 'empty'}" data-m="power:${p.id}"><div class="pi">${p.icon}</div><div class="pt"><b>${p.name}</b><span>${p.desc}${why ? ` · <i>${esc(why)}</i>` : ''}</span></div><div class="pc">×${n}</div></button>`;
+    const why = !n ? 'None owned' : game?.powerBlock(p.id) ?? '';
+    const price = POWER_PRICE[p.id];
+    return `<div class="pwrow"><button class="pw btn3d woodb ${n && !why ? '' : 'empty'}" data-m="power:${p.id}"><div class="pi">${p.icon}</div><div class="pt"><b>${p.name}</b><span>${p.desc}${why ? ` · <i>${esc(why)}</i>` : ''}</span></div><div class="pc">×${n}</div></button><button class="pwbuy btn3d ${profile.shards >= price ? 'blueb' : 'stoneb'}" data-m="buypower:${p.id}" title="Buy one for ${price} Shards">+1<span>${SH}${price}</span></button></div>`;
   }).join('');
-  modal(`<h2>Powers</h2><div class="hint">One-shot items. Earn more by finishing games: the more waves you survive, the more you get.</div>${rows}<button class="mbtn btn3d woodb" data-m="resume">Close</button>`);
+  modal(`<h2>Powers</h2><div class="wallet">${SH} <b>${fmt(profile.shards)}</b> Shards</div>
+    <div class="hint">One-shot items, up to ${Game.POWERS_PER_BATTLE} per battle (${used} used). Win them by finishing games, or buy them with Shards from your Vault.</div>${rows}<button class="mbtn btn3d woodb" data-m="resume">Close</button>`);
 }
+
+// ---------------------------------------------------------------- Shard Vault
+const fmtDur = (ms: number) => { const m = Math.ceil(ms / 60000); return m >= 60 ? `${Math.floor(m / 60)}h ${m % 60}m` : `${m}m`; };
+function vaultWidget() {
+  const now = Date.now(), stored = vaultStored(profile, now), cap = vaultCap(profile), full = stored >= cap;
+  return `<div class="vault ${full ? 'full' : ''}" id="vaultw"><div class="v-top">${ICON.shard}<div class="v-t"><b>${VAULT_LEVELS[profile.vaultLevel].name}</b><span>${full ? 'Full! Collect to keep it filling' : `+1 Shard a minute · full in ${fmtDur(vaultFullIn(profile, now))}`}</span></div><div class="v-wallet" title="Your Shards">${SH}<b>${fmt(profile.shards)}</b></div></div>
+    <div class="v-bar"><i style="width:${(stored / cap) * 100}%"></i><span>${stored} / ${cap}</span></div>
+    <div class="v-btns"><button class="btn3d ${stored ? 'gilt' : 'stoneb'}" data-g="collect">Collect${stored ? ` ${stored}` : ''}</button><button class="btn3d blueb" data-g="shop">Shard Shop</button></div></div>`;
+}
+function shopScreen() {
+  const next = VAULT_LEVELS[profile.vaultLevel + 1];
+  const rows = POWERS.map((p) => { const price = POWER_PRICE[p.id]; return `<button class="pw btn3d ${profile.shards >= price ? 'woodb' : 'stoneb'}" data-g="buypower:${p.id}"><div class="pi">${p.icon}</div><div class="pt"><b>${p.name}</b><span>${p.desc} · you own ${profile.powers[p.id] ?? 0}</span></div><div class="pc price">${SH}${price}</div></button>`; }).join('');
+  return `<div class="mh">Shard Shop</div>${vaultWidget()}
+    <div class="panel shop-panel"><div class="ti-h">Bigger vault</div>
+      ${next ? `<button class="pw btn3d ${profile.shards >= next.cost ? 'gilt' : 'stoneb'}" data-g="vaultup"><div class="pi">${ICON.shard}</div><div class="pt"><b>${next.name}</b><span>Holds ${next.cap} Shards instead of ${vaultCap(profile)}, so you can stay away ${fmtDur(next.cap * 60000)} before it fills.</span></div><div class="pc price">${SH}${next.cost}</div></button>` : '<div class="hint">Your vault is as big as it gets: 500 Shards.</div>'}
+      <div class="ti-h">Powers (one-shot items, up to ${Game.POWERS_PER_BATTLE} per battle)</div>${rows}
+      <div class="hint">You also earn Shards by playing: ${SHARDS_PER_WAVE} per wave, ${SHARDS_BOSS_WAVE} for boss waves, ${SHARDS_VICTORY} for a victory.</div></div>
+    <button class="mbtn btn3d woodb" data-g="main">Back</button>`;
+}
+setInterval(() => { // keep the vault display live while a menu is open
+  if (!menuWrap.classList.contains('on') || (menuScreen !== 'main' && menuScreen !== 'shop')) return;
+  const el = document.getElementById('vaultw'); if (!el) return;
+  const fresh = document.createElement('div'); fresh.innerHTML = vaultWidget(); el.replaceWith(fresh.firstElementChild!);
+}, 5000);
 
 function toggleFullscreen() {
   try { if (document.fullscreenElement) void document.exitFullscreen(); else void document.documentElement.requestFullscreen(); } catch { /* not allowed here */ }
@@ -859,7 +903,7 @@ const pick = { map: profile.lastMap ?? 'meadow', diff: (profile.lastDiff ?? 'med
 if (!mapUnlocked(profile, pick.map)) pick.map = 'meadow';
 if (!heroUnlocked(profile, pick.hero)) pick.hero = 'aldric';
 
-function showMenu(screen: 'main' | 'play' | 'tree' | 'settings' | 'how') {
+function showMenu(screen: 'main' | 'play' | 'tree' | 'settings' | 'how' | 'shop') {
   menuScreen = screen;
   menuWrap.classList.add('on');
   menuWrap.classList.toggle('setupmode', screen === 'play');
@@ -877,7 +921,10 @@ function showMenu(screen: 'main' | 'play' | 'tree' | 'settings' | 'how') {
       <button class="mbtn btn3d woodb" data-g="tree">${ICON.book} Knowledge <span class="num">(${perkPointsLeft(profile)})</span></button>
       <button class="mbtn btn3d woodb" data-g="how">${ICON.target} How to Play</button>
       <button class="mbtn btn3d woodb" data-g="settings">${ICON.menu} Settings</button>
+      ${vaultWidget()}
       <div class="small-note">Medals ${medalCount(profile)} · Rounds played ${profile.totalRounds}</div>`;
+  } else if (screen === 'shop') {
+    h += shopScreen();
   } else if (screen === 'tree') {
     const left = perkPointsLeft(profile);
     h += `<div class="mh">Knowledge</div><div class="panel"><div class="hint" style="text-align:center">Earn points from medals (1 per map per difficulty) and every 30 rounds played. Points available: <b style="color:#a8680f">${left}</b>. Second-row perks need 2 perks in the same branch.</div><div class="tree">`;
@@ -990,6 +1037,10 @@ menu.addEventListener('click', (ev) => {
     case 'tree': showMenu('tree'); break;
     case 'how': showMenu('how'); break;
     case 'settings': showMenu('settings'); break;
+    case 'shop': showMenu('shop'); break;
+    case 'collect': { const n = collectVault(profile, Date.now()); if (n) { saveProfile(profile); audio.play('coin'); toast2(`+${n} Shards collected`); } else toast2('Nothing to collect yet: the vault fills by 1 Shard a minute'); showMenu(menuScreen as 'main' | 'shop'); break; }
+    case 'vaultup': if (upgradeVault(profile, Date.now())) { saveProfile(profile); audio.play('upgrade'); toast2(`Vault upgraded: holds ${vaultCap(profile)} Shards`); } else { audio.play('error'); toast2(`Not enough Shards (need ${VAULT_LEVELS[profile.vaultLevel + 1]?.cost ?? 0})`); } showMenu('shop'); break;
+    case 'buypower': { const p = POWERS.find((x) => x.id === v)!; if (spendShards(profile, POWER_PRICE[v])) { profile.powers[v] = (profile.powers[v] ?? 0) + 1; saveProfile(profile); audio.play('coin'); toast2(`Bought ${p.name}`); } else { audio.play('error'); toast2(`${p.name} costs ${POWER_PRICE[v]} Shards (you have ${profile.shards})`); } showMenu('shop'); break; }
     case 'map': pick.map = v; profile.lastMap = v; saveProfile(profile); refreshSetup(); break;
     case 'diff': pick.diff = v as Difficulty; profile.lastDiff = v as Difficulty; saveProfile(profile); refreshSetup(); break;
     case 'hero': pick.hero = v; profile.lastHero = v; saveProfile(profile); refreshSetup(); break;
@@ -1034,6 +1085,7 @@ function beginSession() {
   $('#game').classList.add('on');
   selected = null; placing = null; ghost = undefined; armedSpell = null; rallyEdit = null; drag = null;
   panelKey = ''; abilKey = ''; lastTop = ''; waveKey = ''; hudKey = ''; endHandled = false; paused = false; autoT = null;
+  battleShards = 0;
   tutStep = !profile.tutorialDone && game && game.round === 0 ? 0 : -1;
   renderCoach();
   requestAnimationFrame(layout);
