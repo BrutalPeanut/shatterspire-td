@@ -32,7 +32,7 @@ with sync_playwright() as p:
                 tid=random.choice(aff); s=pg.evaluate(FIND, random.random()<0.6)
                 if not s: continue
                 n0=pg.evaluate('__ss.game.towers.length')
-                card=pg.locator(f'.card[data-v="{tid}"]'); card.scroll_into_view_if_needed(); c=card.bounding_box()
+                card=pg.locator(f'.tile[data-v="{tid}"]'); card.scroll_into_view_if_needed(); c=card.bounding_box()
                 if act=='drag':
                     if mode=='mouse':
                         pg.mouse.move(c['x']+20,c['y']+20); pg.mouse.down(); pg.mouse.move(s['x'],s['y'],steps=random.choice([1,5,12])); pg.mouse.up()
@@ -46,7 +46,7 @@ with sync_playwright() as p:
                 pg.wait_for_timeout(80)
                 n1=pg.evaluate('__ss.game.towers.length')
                 if n1==n0:
-                    fails.append(dict(step=step,act=act,t=tid,ui=pg.evaluate('__ss.ui()'),slot=pg.inner_text('#wavebox')[:80],gold=pg.evaluate('__ss.game.gold'),state=pg.evaluate('__ss.game.state')))
+                    fails.append(dict(step=step,act=act,t=tid,ui=pg.evaluate('__ss.ui()'),slot=pg.inner_text('#slot')[:80],gold=pg.evaluate('__ss.game.gold'),state=pg.evaluate('__ss.game.state')))
                     pg.keyboard.press('Escape')
                 else: placed+=1
             elif act=='select':
@@ -59,11 +59,11 @@ with sync_playwright() as p:
                 if g['state']=='build': pg.click('#startBtn')
                 pg.wait_for_timeout(random.choice([200,900,2500]))
             elif act=='info':
-                pg.click('.card[data-v="cannon"]'); pg.wait_for_timeout(50)
+                pg.click('.tile[data-v="cannon"]'); pg.wait_for_timeout(50)
                 if pg.locator('[data-h="info"]').count(): pg.click('[data-h="info"]'); pg.click('[data-m="resume"]')
                 if random.random()<0.5: pg.keyboard.press('Escape')
             elif act=='guide':
-                if pg.locator('.grp-h').count(): pg.locator('.grp-h').first.click(); pg.click('[data-m="resume"]')
+                pg.click('#pauseBtn'); pg.click('[data-m="guide"]'); pg.click('[data-m="resume"]')
             elif act=='speed': pg.click('#speedBtn')
         print(mode,'placed',placed,'failures',len(fails),'errors',errs[:3])
         for f in fails[:6]: print('  ',json.dumps(f)[:300])

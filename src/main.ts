@@ -5,6 +5,7 @@ import '@fontsource/lilita-one/latin-400.css';
 import '@fontsource/nunito/latin-700.css';
 import '@fontsource/nunito/latin-800.css';
 import './style.css';
+import './battle.css';
 import { Game, DIFF, type Tower } from './core/game';
 import { MAPS } from './core/maps';
 import { TOWERS, TOWER_MAP, canUpgradePath } from './core/towers';
@@ -30,20 +31,23 @@ const fmtShort = (n: number) => (n >= 1e6 ? `${(n / 1e6).toFixed(n >= 1e7 ? 0 : 
 
 document.getElementById('app')!.innerHTML = `
 <div id="game">
-  <div id="topbar">
-    <div class="stat lives" title="Lives">${ICON.heart}<div class="sv"><span class="cap">Lives</span><span id="lives">0</span></div></div>
-    <div class="stat gold" title="Gold">${ICON.coin}<div class="sv"><span class="cap">Gold</span><span id="gold">0</span></div></div>
-    <div class="stat" title="Wave">${ICON.swords}<div class="sv"><span class="cap">Wave</span><span id="round">0</span></div></div>
-    <div class="spacer"></div>
-    <button class="tbtn btn3d woodb" id="pauseBtn" title="Pause (P / Esc)">${ICON.pause}<span class="tl"><span class="lbl2">Pause</span></span></button>
-    <button class="tbtn btn3d woodb" id="speedBtn" title="Game speed (F)">${ICON.speed}<span class="tl"><span class="lbl2">Speed</span><span class="lbl3" id="spd">1×</span></span></button>
-    <button class="tbtn btn3d woodb" id="autoBtn" title="Auto-start the next wave">${ICON.auto}<span class="tl"><span class="lbl2">Auto</span><span class="lbl3" id="autoState">Off</span></span></button>
-    <button class="tbtn btn3d greenb" id="startBtn"></button>
+  <div id="stage"><canvas id="canvas"></canvas>
+    <div id="hud">
+      <div class="hs lives" title="Lives">${ICON.heart}<span id="lives">0</span></div>
+      <div class="hs gold" title="Gold">${ICON.coin}<span id="gold">0</span></div>
+      <div class="sp"></div>
+      <div class="hs round" title="Wave"><small>Round</small><span id="round">0</span></div>
+      <button class="cb" id="pauseBtn" title="Pause (P / Esc)">${ICON.pause}</button>
+    </div>
+    <div id="abil"></div><div id="toast"></div>
   </div>
-  <div id="main">
-    <div id="field"><canvas id="canvas"></canvas><div id="abil"></div><div id="toast"></div></div>
-    <div id="side"><div id="coach"></div><div id="wavebox"></div><div id="sbody"></div></div>
+  <div id="rail"><div id="coach"></div><div id="slot"></div><div id="tiles"></div></div>
+  <div id="ctrl">
+    <button class="cb" id="autoBtn" title="Auto-start the next wave">${ICON.auto}<span class="cl">Auto <b id="autoState">Off</b></span></button>
+    <button class="cb" id="speedBtn" title="Game speed (F)">${ICON.speed}<span class="cl" id="spd">1×</span></button>
+    <button class="cb" id="startBtn"></button>
   </div>
+  <div id="tpanel"></div>
 </div>
 <div id="menu"><canvas id="menuBg"></canvas><div id="menuShade"></div><div id="menuBody"></div></div>
 <div id="modal"></div>`;
@@ -72,7 +76,7 @@ let shiftHeld = false;
 
 // ================================================================ layout
 function layout() {
-  const field = $('#field');
+  const field = $('#stage');
   const cs = getComputedStyle(field);
   const w = field.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
   const h = field.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
@@ -83,7 +87,7 @@ function layout() {
 }
 window.addEventListener('resize', () => setTimeout(layout, 50));
 window.addEventListener('orientationchange', () => setTimeout(layout, 200));
-if (typeof ResizeObserver !== 'undefined') new ResizeObserver(() => layout()).observe(document.getElementById('field')!);
+if (typeof ResizeObserver !== 'undefined') new ResizeObserver(() => layout()).observe(document.getElementById('stage')!);
 
 const TOUCH_LIFT = 42; // css px: keep a dragged tower visible above the finger
 function toWorld(ev: { clientX: number; clientY: number; pointerType?: string }, lift = false) {
@@ -287,6 +291,7 @@ function refreshTop() {
   $('#gold').textContent = fmtShort(game.gold);
   $('#round').textContent = game.freeplay ? `${game.round}` : `${game.round}/${game.totalWaves}`;
   $('#spd').textContent = `${speed}×`;
+  $('#speedBtn').classList.toggle('on', speed > 1);
   $('#autoState').textContent = auto ? 'On' : 'Off';
   const ab = $('#autoBtn');
   ab.classList.toggle('on', auto);
@@ -294,16 +299,17 @@ function refreshTop() {
   const sb = $('#startBtn');
   const building = game.state === 'build';
   const next = game.round + 1;
-  if (building && autoT !== null) sb.innerHTML = `${ICON.play}<span class="tl"><span class="lbl2">Wave ${next}</span><span class="lbl3">in ${Math.ceil(autoT)}s</span></span>`;
-  else if (building) sb.innerHTML = `${ICON.play}<span class="tl"><span class="lbl2">${game.round === 0 ? 'Start' : 'Next'}</span><span class="lbl3">wave ${next}</span></span>`;
-  else sb.innerHTML = `${ICON.swords}<span class="tl"><span class="lbl2">Wave ${game.round}</span><span class="lbl3">fighting</span></span>`;
+  // one round button, Bloons-style: Play between waves, a dimmed "fighting" state during one
+  if (building && autoT !== null) sb.innerHTML = `${ICON.play}<span class="cl">in ${Math.ceil(autoT)}s</span>`;
+  else if (building) sb.innerHTML = `${ICON.play}<span class="cl">${game.round === 0 ? 'Start' : `Wave ${next}`}</span>`;
+  else sb.innerHTML = `${ICON.swords}<span class="cl">Wave ${game.round}</span>`;
   sb.title = building ? `Start wave ${next} (Space)` : 'Wave in progress';
   sb.classList.toggle('running', !building);
   sb.classList.toggle('pulse', building && game.round === 0);
 }
 
 // ================================================================ next-wave box (fixed height, never shifts the Armory)
-const waveBox = $('#wavebox');
+const waveBox = $('#slot');
 let waveKey = '';
 let waveInfoCache: WaveInfo | null = null;
 /** Tower the advisor suggests for the coming wave (starred in the Armory). */
@@ -324,12 +330,9 @@ function renderWaveBox() {
   recId = rec?.tower ?? null;
   const tip = rec ? `<span class="chip gold" title="${esc(rec.why)}">★ ${esc(TOWER_MAP[rec.tower].name)}</span>` : '';
   const hoard = building && (wi.giant || wi.boss) && g.gold >= 1500 ? `<span class="chip gold">${fmtShort(g.gold)} gold unspent</span>` : '';
-  const head = building ? `Next: Wave ${r}${g.freeplay ? '' : `/${g.totalWaves}`}` : `Wave ${r}: ${left} enemies left`;
+  const head = building ? `Next: wave ${r}` : `${left} enemies left`;
   const units = wi.units.map((u) => `${u.count} ${u.name}${u.count > 1 && !u.name.endsWith('s') ? 's' : ''}`).join(', ');
-  waveBox.innerHTML = `<button class="wb" data-a="waveinfo" title="Wave details">
-    <div class="wb-top"><span class="wb-h">${head}</span><span class="wb-more">${ICON.info}<span>Details</span></span></div>
-    <div class="wb-units">${esc(units || 'Procedural freeplay wave')}</div>
-    <div class="wb-chips">${tip}${chips}${hoard}</div></button>`;
+  waveBox.innerHTML = `<button class="sl sl-wave" data-a="waveinfo" title="Wave details"><b>${head} ${ICON.info}</b><span class="sl-u">${esc(units || 'Freeplay wave')}</span><span class="sl-c">${tip}${chips}${hoard}</span></button>`;
 }
 function waveDetails() {
   if (!game) return;
@@ -348,9 +351,10 @@ function waveDetails() {
 }
 
 // ================================================================ side panel
-const side = $('#side');
-const sbody = $('#sbody');
-side.addEventListener('click', (ev) => {
+const side = $('#rail');
+const sbody = $('#tiles');
+const tpanel = $('#tpanel');
+function panelClick(ev: Event) {
   const el = (ev.target as HTMLElement).closest('[data-a]') as HTMLElement | null;
   if (!el || !game) return;
   audio.init();
@@ -362,7 +366,7 @@ side.addEventListener('click', (ev) => {
   else if (a === 'target') {
     if (!selected) return;
     const order: Targeting[] = ['first', 'last', 'strong', 'close'];
-    selected.targeting = order[(order.indexOf(selected.targeting) + 1) % 4];
+    selected.targeting = order[(order.indexOf(selected.targeting) + (v === '-1' ? 3 : 1)) % 4];
     panelKey = ''; audio.play('click');
   } else if (a === 'withdraw' && selected) { game.withdraw(selected); audio.play('coin'); panelKey = ''; }
   else if (a === 'rally' && selected) { rallyEdit = rallyEdit ? null : selected; audio.play('click'); panelKey = ''; }
@@ -370,7 +374,9 @@ side.addEventListener('click', (ev) => {
   else if (a === 'groups') groupGuide(v || undefined);
   else if (a === 'waveinfo') waveDetails();
   else if (a === 'info' && selected) towerInfoModal(selected.defId, selected.isHero);
-});
+}
+side.addEventListener('click', panelClick);
+tpanel.addEventListener('click', panelClick);
 
 function buyUpgrade(p: number) {
   if (!game || !selected) return;
@@ -403,19 +409,26 @@ function iconURL(defId: string, isHero: boolean) {
 }
 const img = (defId: string, isHero = false, size = 52) => `<img src="${iconURL(defId, isHero)}" width="${size}" height="${size}" alt="" draggable="false">`;
 
+let shopKey = '';
 function renderSide() {
   if (!game) return;
   const g = game;
   const t = selected && g.towers.includes(selected) ? selected : null;
   if (!t && selected) selected = null;
-  const key = t ? `t${t.uid}|${t.tiers.join('')}|${t.targeting}|${t.level}|${Math.floor(t.bank)}|${!!rallyEdit}` : `shop|${profile.totalRounds}|${g.heroId}`;
+  // the tower tiles are built once per battle and only updated in place, so they never move
+  const sk = `shop|${profile.totalRounds}|${g.heroId}`;
+  if (sk !== shopKey) { shopKey = sk; sbody.innerHTML = shopPanel(); }
+  updateShop();
+  const key = t ? `t${t.uid}|${t.tiers.join('')}|${t.targeting}|${t.level}|${Math.floor(t.bank)}|${!!rallyEdit}` : 'none';
   if (key !== panelKey) {
     panelKey = key;
-    sbody.innerHTML = t ? towerPanel(t) : shopPanel();
+    tpanel.innerHTML = t ? towerPanel(t) : '';
+    tpanel.classList.toggle('on', !!t && !rallyEdit); // while moving a rally point the panel steps aside so the whole road is reachable
+    // like Bloons: the panel opens on the side away from the tower so it never hides it
+    if (t) tpanel.classList.toggle('L', t.x > WORLD_W / 2);
   }
-  if (!t) updateShop();
-  sbody.querySelectorAll<HTMLElement>('[data-cost]').forEach((el) => el.classList.toggle('poor', g.gold < Number(el.dataset.cost)));
-  if (t) { const st = sbody.querySelector('.tp-sub'); if (st) st.textContent = towerStatLine(t); }
+  document.querySelectorAll<HTMLElement>('#tiles [data-cost], #tpanel [data-cost]').forEach((el) => el.classList.toggle('poor', g.gold < Number(el.dataset.cost)));
+  if (t) { const st = tpanel.querySelector('.tq-sub'); if (st) st.textContent = towerStatLine(t); }
 }
 
 /** Plain-language combat record for a tower. */
@@ -432,22 +445,19 @@ function towerStatLine(t: Tower) {
 function shopPanel() {
   const g = game!;
   const hd = g.heroDef;
-  const card = (id: string) => {
-    if (id === 'hero') return `<button class="card hero" data-a="buy" data-v="hero" data-cost="${g.towerCost('hero')}">${img(hd.id, true)}<div class="nm">${esc(hd.name)}</div><div class="role">Hero</div><div class="cost">${ICON.coinSmall}<span>${fmt(g.towerCost('hero'))}</span></div></button>`;
+  const tile = (id: string) => {
+    const gc = groupOf(id).color;
+    if (id === 'hero') return `<button class="tile hero" style="--gc:${gc}" data-a="buy" data-v="hero" data-cost="${g.towerCost('hero')}" aria-label="${esc(hd.name)}">${img(hd.id, true)}<span class="tc">${ICON.coinSmall}<span>${fmt(g.towerCost('hero'))}</span></span></button>`;
     const d = TOWER_MAP[id];
     const cost = g.towerCost(id);
     return towerUnlocked(profile, id)
-      ? `<button class="card" data-a="buy" data-v="${id}" data-cost="${cost}">${img(id)}<div class="nm">${esc(d.name)}</div><div class="role">${esc(infoFor(id, false).tag)}</div><div class="cost">${ICON.coinSmall}<span>${fmt(cost)}</span></div></button>`
-      : `<button class="card locked" data-a="buy" data-v="${id}" data-lock="${esc(d.name)} unlocks after ${d.unlockRounds} rounds played (${d.unlockRounds - profile.totalRounds} to go)">${img(id)}<div class="nm">${esc(d.name)}</div><div class="role">${esc(infoFor(id, false).tag)}</div><div class="cost">${ICON.lock.replace('class="ico"', 'class="ico sm"')} ${d.unlockRounds - profile.totalRounds}</div></button>`;
+      ? `<button class="tile" style="--gc:${gc}" data-a="buy" data-v="${id}" data-cost="${cost}" aria-label="${esc(d.name)}">${img(id)}<span class="tc">${ICON.coinSmall}<span>${fmt(cost)}</span></span></button>`
+      : `<button class="tile locked" style="--gc:${gc}" data-a="buy" data-v="${id}" aria-label="${esc(d.name)} (locked)" data-lock="${esc(d.name)} unlocks after ${d.unlockRounds} rounds played (${d.unlockRounds - profile.totalRounds} to go)">${img(id)}<span class="tc">${ICON.lock.replace('class="ico"', 'class="ico sm"')}<span>${d.unlockRounds - profile.totalRounds}</span></span></button>`;
   };
-  // Towers are grouped by job; each group box spans as many grid columns as it has cards.
-  let h = `<div class="side-title">Armory</div><div class="shop">`;
-  for (const gr of GROUPS) {
-    h += `<div class="grp ${gr.towers.length === 1 ? "one" : ""}" style="--gc:${gr.color};--n:${gr.towers.length}"><button class="grp-h" data-a="groups" data-v="${gr.id}" title="${esc(gr.how)}"><b>${esc(gr.name)}</b><span>${esc(gr.short)}</span></button><div class="grp-c">${gr.towers.map(card).join('')}</div></div>`;
-  }
-  h += `</div><div class="row"><button class="btn btn3d woodb" data-a="groups">${ICON.book} Tower guide</button><button class="btn btn3d blueb" data-a="powers">${ICON.sparkle} Powers <span id="pwN"></span></button></div>
-    <div class="hint" id="shopHint"></div>`;
-  return h;
+  // tile colour = the tower's job (Crowd, Single target, Control, Support), as in Bloons' tower categories
+  // the cheap starter (Archer) sits in the first row beside the hero, like Bloons' Dart Monkey
+  const order = ['hero', 'single', 'crowd', 'control', 'support'];
+  return [...GROUPS].sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id)).flatMap((gr) => gr.towers).map(tile).join('');
 }
 /** Explains the tower groups and a sensible build order. */
 function groupGuide(focus?: string) {
@@ -459,7 +469,7 @@ function groupGuide(focus?: string) {
 }
 function updateShop() {
   const g = game!;
-  for (const el of Array.from(sbody.querySelectorAll<HTMLElement>('.card[data-v]'))) {
+  for (const el of Array.from(sbody.querySelectorAll<HTMLElement>('.tile[data-v]'))) {
     const id = el.dataset.v!;
     if (el.classList.contains('locked')) continue;
     el.classList.toggle('sel', placing === id);
@@ -469,58 +479,49 @@ function updateShop() {
       const dep = g.heroPlaced;
       if (el.classList.contains('deployed') !== dep) {
         el.classList.toggle('deployed', dep);
-        const c = el.querySelector('.cost');
+        const c = el.querySelector('.tc');
         if (c) c.innerHTML = dep ? '<span>Deployed</span>' : `${ICON.coinSmall}<span>${fmt(cost)}</span>`;
         if (dep) { el.removeAttribute('data-cost'); el.classList.remove('poor'); } else el.dataset.cost = String(cost);
       }
       if (dep) continue;
     }
-    if (el.dataset.cost !== String(cost)) { el.dataset.cost = String(cost); const c = el.querySelector('.cost span'); if (c) c.textContent = cost === 0 ? 'FREE' : fmt(cost); }
+    if (el.dataset.cost !== String(cost)) { el.dataset.cost = String(cost); const c = el.querySelector('.tc span'); if (c) c.textContent = cost === 0 ? 'FREE' : fmt(cost); }
   }
-  const pw = Object.values(profile.powers).reduce((a, b) => a + b, 0);
-  const n = sbody.querySelector('#pwN'); if (n && n.textContent !== `(${pw})`) n.textContent = `(${pw})`;
-  const hint = sbody.querySelector('#shopHint');
-  const txt = g.freeTower ? '📜 Your next tower is free!' : matchMedia('(pointer: coarse)').matches ? '<b>Drag</b> a tower onto the map, or tap it, then tap the map. Tap a built tower to upgrade it.' : '<b>Drag</b> a tower onto the map, or click it, then click the map. Hold <b>Shift</b> to build several. Click a tower to upgrade it.';
-  if (hint && hint.innerHTML !== txt) hint.innerHTML = txt;
 }
 
 function towerPanel(t: Tower) {
   const g = game!;
-  const head = (name: string, isHero: boolean) => {
-    const inf = infoFor(t.defId, isHero), dt = DTYPE[baseStats(t.defId, isHero).dtype];
-    return `<div class="tp-head">${img(t.defId, isHero)}<div><div class="tp-name">${esc(name)}</div><div class="tp-sub"></div></div><button class="tp-x btn3d redb" data-a="close" title="Close (Esc)">${ICON.close}</button></div>
-    <button class="tp-role" data-a="info" title="What this tower does">${ICON.info}<span><b>${esc(inf.tag)}</b> · ${esc(dt.name)} damage. ${esc(inf.line)}</span></button>`;
-  };
+  const head = (name: string, isHero: boolean) => `<div class="tq-head">${img(t.defId, isHero)}<div class="tq-id"><div class="tq-name">${esc(name)}</div><div class="tq-sub"></div></div><button class="tq-ib tq-info" data-a="info" title="What this tower does">${ICON.info}</button><button class="tq-ib tq-x" data-a="close" title="Close (Esc)">${ICON.close}</button></div>`;
+  const tlabel = t.targeting[0].toUpperCase() + t.targeting.slice(1);
+  const target = t.stats.attacks.length ? `<div class="tq-target" title="Which enemy to shoot"><button data-a="target" data-v="-1" aria-label="Previous target mode">◀</button><span>Target: <b>${tlabel}</b></span><button data-a="target" data-v="1" aria-label="Next target mode">▶</button></div>` : '';
   let h = '';
   if (t.isHero) {
     const hd = HERO_MAP[t.defId];
     const L = t.level, next = HERO_XP[L] ?? null, prev = HERO_XP[L - 1];
-    h += head(`${hd.name} · Lv ${L}`, true);
-    h += `<div class="hint">${esc(hd.title)}. ${esc(hd.desc)}</div>`;
+    h += head(`${hd.name} · Lv ${L}`, true) + target;
     h += `<div class="xpbar"><div style="width:${next ? Math.min(100, ((t.xp - prev) / (next - prev)) * 100) : 100}%"></div></div>`;
-    h += `<div class="hint">${next ? `XP ${fmt(t.xp)} / ${fmt(next)} to level ${L + 1}` : 'MAX LEVEL'}. Heroes gain XP every wave.</div>`;
+    h += `<div class="tq-note">${next ? `${fmt(t.xp)} / ${fmt(next)} XP to level ${L + 1}` : 'Max level'}</div>`;
     for (const a of hd.abilities) {
       const has = t.abilities.some((x) => x.def.id === a.def.id);
-      h += `<div class="path"><div class="path-h p1">${esc(a.def.name)} <span class="pips">${has ? 'Unlocked' : `Unlocks at Lv ${a.level}`}</span></div><div class="up max"><div class="ud">${esc(a.desc)} · ${a.def.cd}s recharge</div></div></div>`;
+      h += `<div class="tq-ab ${has ? 'has' : ''}"><b>${esc(a.def.name)}</b><small>${has ? 'Unlocked' : `Level ${a.level}`} · ${a.def.cd}s</small><span>${esc(a.desc)}</span></div>`;
     }
   } else {
     const d = TOWER_MAP[t.defId];
-    h += head(d.name, false);
+    h += head(d.name, false) + target;
     for (let p = 0; p < 3; p++) {
       const tier = t.tiers[p];
-      const pips = Array.from({ length: 5 }, (_, i) => `<div class="pip ${i < tier ? 'on' : ''}"></div>`).join('');
+      const pips = Array.from({ length: 5 }, (_, i) => `<i class="pip ${i < tier ? 'on' : ''}"></i>`).join('');
       let btn: string;
-      if (tier >= 5) btn = `<div class="up max"><div class="un">${esc(d.upgrades[p][4].name)} <span>MAX</span></div></div>`;
-      else if (!canUpgradePath(t.tiers, p)) btn = `<div class="up closed"><div class="un">${esc(d.upgrades[p][tier].name)} <span>${ICON.lock.replace('class="ico"', 'class="ico sm"')}</span></div><div class="ud">Path closed: 2 paths max, only one past tier 2</div></div>`;
-      else { const u = d.upgrades[p][tier]; const cost = g.upgradeCost(t, p); btn = `<button class="up btn3d woodb" data-a="up" data-v="${p}" data-cost="${cost}"><div class="un">${esc(u.name)} <span class="uc">${ICON.coinSmall}${fmt(cost)}</span></div><div class="ud">${esc(u.desc)}</div><div class="udl">${upgradeDelta(d, t.tiers, p).map(esc).join(' · ')}</div></button>`; }
-      h += `<div class="path"><div class="path-h p${p}">${esc(d.paths[p])}<div class="pips">${pips}</div></div>${btn}</div>`;
+      if (tier >= 5) btn = `<div class="ug max"><b>Path complete</b></div>`;
+      else if (!canUpgradePath(t.tiers, p)) btn = `<div class="ug closed"><b>${ICON.lock.replace('class="ico"', 'class="ico sm"')} Path closed</b><span class="udl">2 paths, only one past tier 2</span></div>`;
+      else { const u = d.upgrades[p][tier]; const cost = g.upgradeCost(t, p); btn = `<button class="ug" data-a="up" data-v="${p}" data-cost="${cost}" title="${esc(u.desc)}"><b>${esc(u.name)}</b><span class="udl">${upgradeDelta(d, t.tiers, p).map(esc).join(' · ')}</span><span class="uc">${ICON.coinSmall}${fmt(cost)}</span></button>`; }
+      h += `<div class="tq-path p${p}"><div class="tq-own"><small>${esc(d.paths[p])}</small><b>${tier ? esc(d.upgrades[p][tier - 1].name) : 'Not upgraded'}</b><div class="pips">${pips}</div></div>${btn}</div>`;
     }
-    if (t.stats.bank) h += `<div class="row"><button class="btn btn3d gilt" data-a="withdraw">${ICON.coinSmall} Withdraw ${fmt(t.bank)}</button></div>`;
-    if (t.stats.barracks) h += `<div class="row"><button class="btn btn3d ${rallyEdit ? 'gilt' : 'blueb'}" data-a="rally">${ICON.flag} ${rallyEdit ? 'Tap the road… (Cancel)' : 'Move Rally Point'}</button></div>`;
   }
-  const canTarget = t.stats.attacks.length > 0;
-  const tlabel = t.targeting[0].toUpperCase() + t.targeting.slice(1);
-  h += `<div class="row">${canTarget ? `<button class="btn btn3d woodb" data-a="target" title="Which enemy to shoot: First, Last, Strong, Close">${ICON.target} Target: ${tlabel}</button>` : ''}<button class="btn btn3d redb" data-a="sell">Sell ${ICON.coinSmall}${fmt(g.sellValue(t) + t.bank)}</button></div>`;
+  h += '<div class="tq-foot">';
+  if (!t.isHero && t.stats.bank) h += `<button class="tq-btn gold" data-a="withdraw">Withdraw ${fmt(t.bank)}</button>`;
+  if (!t.isHero && t.stats.barracks) h += `<button class="tq-btn blue" data-a="rally">${rallyEdit ? 'Tap the road…' : 'Move rally'}</button>`;
+  h += `<button class="tq-btn sell" data-a="sell">Sell ${ICON.coinSmall}${fmt(g.sellValue(t) + t.bank)}</button></div>`;
   return h;
 }
 
@@ -560,11 +561,11 @@ function hoverHtml(id: string) {
   const isHero = id === 'hero', defId = isHero ? g.heroDef.id : id;
   const inf = infoFor(defId, isHero), gr = groupOf(isHero ? 'hero' : defId), dt = DTYPE[baseStats(defId, isHero).dtype];
   const name = isHero ? g.heroDef.name : TOWER_MAP[id].name;
-  return `<div class="hb slotinfo" style="--gc:${gr.color}"><div class="hb-t"><b>${esc(name)} <span class="chip" style="background:var(--gc)">${esc(gr.name)}</span></b><span class="hb-line">${esc(inf.line)}</span><span class="hb-st">${esc(dt.name)}: ${esc(dt.blocked)}</span></div></div>`;
+  return `<div class="sl sl-info" style="--gc:${gr.color}"><b>${esc(name)}</b><span class="sl-g">${esc(gr.name)} · ${esc(dt.name)}</span><span class="sl-l">${esc(inf.line)}</span></div>`;
 }
 sbody.addEventListener('pointerover', (ev) => {
   if (ev.pointerType !== 'mouse' || drag || placing) return;
-  const card = (ev.target as HTMLElement).closest('.card[data-v]') as HTMLElement | null;
+  const card = (ev.target as HTMLElement).closest('.tile[data-v]') as HTMLElement | null;
   hoverId = card ? card.dataset.v! : null;
 });
 sbody.addEventListener('pointerleave', () => { hoverId = null; });
@@ -583,14 +584,15 @@ function renderHud() {
     const bad = !!ghost && !ghost.valid;
     key = `p|${placing}|${cost}|${status}|${bad}`;
     const inf = infoFor(placing === 'hero' ? g.heroDef.id : placing, placing === 'hero');
-    html = `<div class="hb ${bad ? 'bad' : ''}">${img(placing === 'hero' ? g.heroDef.id : placing, placing === 'hero', 34)}<div class="hb-t"><b>${esc(nm)} · ${cost === 0 ? 'FREE' : fmt(cost)}g</b><span class="hb-line">${esc(inf.line)}</span><span class="hb-st">${bad ? '✖ ' : '✔ '}${esc(status)}${placing === 'barracks' && ghost?.valid ? ' · flag = where soldiers stand' : ''}</span></div><div class="hb-btns"><button class="hb-x btn3d blueb" data-h="info">${ICON.info}<span>Info</span></button><button class="hb-x btn3d redb" data-h="cancel">${ICON.close}<span>Cancel</span></button></div></div>`;
+    const btns = `<span class="sl-b"><button data-h="info" aria-label="Tower info">${ICON.info}</button><button class="x" data-h="cancel">${ICON.close} Cancel</button></span>`;
+    html = `<div class="sl sl-place ${bad ? 'bad' : ''}"><b>${esc(nm)} · ${cost === 0 ? 'FREE' : fmt(cost)}</b><span class="sl-l">${esc(inf.line)}</span><span class="sl-u">${bad ? '✖ ' : '✔ '}${esc(status)}</span>${btns}</div>`;
   } else if (armedSpell) {
     const sp = g.spells.find((s) => s.id === armedSpell)!;
     key = `s|${armedSpell}`;
-    html = `<div class="hb"><div class="hb-t"><b>${esc(sp.name)}</b><span>Tap the map to aim</span></div><button class="hb-x btn3d redb" data-h="cancel">${ICON.close}<span>Cancel</span></button></div>`;
+    html = `<div class="sl sl-place"><b>${esc(sp.name)}</b><span class="sl-u">Tap the map to aim</span><span class="sl-b"><button class="x" data-h="cancel">${ICON.close} Cancel</button></span></div>`;
   } else if (rallyEdit) {
     key = 'r';
-    html = `<div class="hb"><div class="hb-t"><b>Move Rally Point</b><span>Tap the road inside the blue circle</span></div><button class="hb-x btn3d redb" data-h="cancel">${ICON.close}<span>Cancel</span></button></div>`;
+    html = `<div class="sl sl-place"><b>Move rally point</b><span class="sl-u">Tap the road in the blue circle</span><span class="sl-b"><button class="x" data-h="cancel">${ICON.close} Cancel</button></span></div>`;
   }
   if (!key && hoverId) { key = `h|${hoverId}`; html = hoverHtml(hoverId); }
   if (key === hudKey) return;
@@ -664,7 +666,7 @@ function renderAbil() {
 // ================================================================ first-run tutorial (non-blocking coach card)
 const coach = $('#coach');
 const TUT: { id: string; title: string; text: string; pulse?: string }[] = [
-  { id: 'placed', title: 'Build your first tower', text: 'Drag the Archer onto the glowing spot beside the road.', pulse: '.card[data-v="archer"]' },
+  { id: 'placed', title: 'Build your first tower', text: 'Drag the Archer onto the glowing spot beside the road.', pulse: '.tile[data-v="archer"]' },
   { id: 'wave', title: 'Start the battle', text: 'Press the green Start button.', pulse: '#startBtn' },
   { id: 'waveEnd', title: 'Hold the line', text: 'Enemies follow the road to your Spire. Every one that gets through costs lives.' },
   { id: 'selected', title: 'Spend your gold', text: 'You earned gold. Tap your Archer on the map to see its upgrades.' },
@@ -694,7 +696,8 @@ function renderCoach() {
   coach.innerHTML = `<div class="cc"><div class="cc-n">${tutStep + 1}/${TUT.length}</div><div class="cc-t"><b>${esc(s.title)}</b><span>${esc(s.text)}</span></div><div class="cc-b">${s.id === 'read' ? '<button class="btn3d gilt" data-c="next">Got it</button>' : '<button class="btn3d woodb" data-c="skip">Skip</button>'}</div></div>`;
   coach.classList.add('on');
   document.querySelectorAll('.tut-pulse').forEach((e) => e.classList.remove('tut-pulse'));
-  if (s.pulse) document.querySelector(s.pulse)?.classList.add('tut-pulse');
+  const pe = s.pulse ? document.querySelector(s.pulse) : null;
+  if (pe) { pe.classList.add('tut-pulse'); if (pe.closest('#tiles')) pe.scrollIntoView({ block: 'nearest' }); }
 }
 coach.addEventListener('click', (ev) => {
   const el = (ev.target as HTMLElement).closest('[data-c]') as HTMLElement | null;
@@ -843,6 +846,7 @@ modalEl.addEventListener('click', (ev) => {
   if (m === 'resume') closeModal();
   else if (m === 'freeplay') { game?.continueFreeplay(); endHandled = false; closeModal(); if (game) saveRun(game); }
   else if (m === 'restart') { grantPending(); if (game) { clearRun(); startGame(game.map.id, game.diff, game.heroId); } closeModal(); }
+  else if (m === 'guide') groupGuide();
   else if (m === 'retrywave') { closeModal(); retryWave(); }
   else if (m.startsWith('tinfo:')) { towerInfoModal(m.slice(6), false); const btn = modalEl.querySelector('[data-m="resume"]'); if (btn && recapHtml && game?.state === 'over') { btn.setAttribute('data-m', 'recap'); btn.textContent = '‹ Back to recap'; } }
   else if (m === 'recap') modal(recapHtml);
@@ -875,6 +879,7 @@ function pauseMenu() {
     <button class="mbtn btn3d woodb" data-m="auto">Auto-start waves: ${profile.settings.autoStart ? 'On' : 'Off'}</button>
     <div class="mrow"><button class="mbtn btn3d woodb" data-m="sfx">Sound: ${profile.settings.sfx ? 'On' : 'Off'}</button><button class="mbtn btn3d woodb" data-m="music">Music: ${profile.settings.music ? 'On' : 'Off'}</button></div>
     ${fs}
+    <button class="mbtn btn3d woodb" data-m="guide">Tower Guide</button>
     <button class="mbtn btn3d woodb" data-m="restart">Restart Map</button>
     <button class="mbtn btn3d woodb" data-m="menu">Save &amp; Quit</button>
     <div class="hint">Progress saves at the end of every wave. Quitting mid-wave resumes from the start of that wave.</div>`);
@@ -1111,7 +1116,7 @@ function beginSession() {
   attract = null;
   $('#game').classList.add('on');
   selected = null; placing = null; ghost = undefined; armedSpell = null; rallyEdit = null; drag = null;
-  panelKey = ''; abilKey = ''; lastTop = ''; waveKey = ''; hudKey = ''; endHandled = false; paused = false; autoT = null;
+  panelKey = ''; shopKey = ''; abilKey = ''; lastTop = ''; waveKey = ''; hudKey = ''; endHandled = false; paused = false; autoT = null;
   battleShards = 0;
   tutSpot = null;
   tutStep = !profile.tutorialDone && game && game.round === 0 ? 0 : -1;
@@ -1198,7 +1203,7 @@ function frame(now: number) {
     renderSide();
     renderHud();
     renderAbil();
-    { const busy = !!(placing || armedSpell || rallyEdit); $('#field').classList.toggle('coach-hide', busy); side.classList.toggle('coach-hide', busy); }
+    { const busy = !!(placing || armedSpell || rallyEdit); $('#stage').classList.toggle('coach-hide', busy); side.classList.toggle('coach-hide', busy); }
   }
   requestAnimationFrame(frame);
 }

@@ -115,6 +115,23 @@ Next steps for `design-pass`, in order:
 - Push with `git -c push.negotiate=true push`, open the PR in Chrome, merge it yourself, and confirm Pages is green.
 - Update this file in the same PR.
 
+
+## Bloons-style battle screen (2026-11-16, PR "Battle screen rebuilt on the Bloons layout")
+
+Owner: "I still really hate the UI and it needs to be redone. Make it more like the bloons version."
+The battle screen was rebuilt on the BTD6 layout. Menus, setup, modals and the recap were NOT restyled yet (next step if he likes this).
+
+- Markup (src/main.ts): `#game > #stage (canvas, #hud, #abil, #toast) + #rail (#coach, #slot, #tiles) + #ctrl (#autoBtn, #speedBtn, #startBtn) + #tpanel`.
+  Old ids are gone: `#field`->`#stage`, `#side`->`#rail`, `#wavebox`->`#slot`, `#sbody`->`#tiles`, `.card`->`.tile`, `.cost`->`.tc`, tower panel `.tp-*`/`.up`->`.tq-*`/`.ug`.
+- All battle CSS lives in `src/battle.css` (imported after style.css). The old battle rules in style.css are dead and can be deleted in a cleanup PR; menus/modals/vault/recap/chips/coach `.cc` in style.css are still live.
+- Layout: map fills the screen; lives/gold top-left and round + Pause top-right drawn over the map edge; slim 2-column rail of icon + price tiles (no names; long-press / (i) opens the info card; tile colour = tower group; ★ = advisor pick); round Auto / Speed / Start buttons under the rail; upgrade panel slides in on the side AWAY from the selected tower (`#tpanel.L`), below the HUD row, with 3 path rows (owned box + green buy button showing the stat delta) and a red Sell.
+  Portrait: HUD bar above the map, abilities (left) + round buttons (right) in a strip under the map, tiles below (6 columns, 4 on tall phones), upgrade panel replaces the tile area so it never covers the map.
+- Tile order is hero, Single (Archer first, like the Dart Monkey), Crowd, Control, Support. The tutorial's pulsing tile is scrolled into view (landscape phones scroll the rail).
+- Tower Guide (groups) moved to the Pause menu (`data-m="guide"`).
+- While moving a rally point the upgrade panel hides so the whole road is reachable.
+- Known trade-off to raise with the owner: on desktop/landscape the upgrade panel covers part of the map (opposite side from the tower), exactly like BTD6. His "nothing covers the map" rule was about tooltips/instruction panels while dragging, which still holds (tested). If he objects, dock the panel into the rail instead.
+- `/tmp/shotb.py`-style screenshots: build 5 towers through `__ss.game`, start a wave, click a tower; check 1366x768, 780x360 (touch), 390x844 (touch).
+
 ## Status (2026-11-15)
 - v1 playable: 10 towers (3 paths x 5 tiers, 5-2-0 crosspath, no paragons), Barracks blockers, layered enemies + giants + bosses (waves 20/30/40), 4 curved spline maps, 3 difficulties, 40 waves + freeplay, 3 heroes, spells, consumable powers, knowledge tree, WebAudio SFX/music, localStorage saves.
 - Unlock everything for testing: `?unlockall` or `#unlockall`.
