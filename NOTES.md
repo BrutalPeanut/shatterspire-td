@@ -15,6 +15,7 @@
 ### Working alongside ChatGPT (from 2026-11-15)
 - Brian is having ChatGPT review these changes, and it has push access to this repo. Start each session by pulling every branch and reading its commits and PRs (`git fetch --all`, `git log --all --oneline -20`) before touching anything.
 - If Claude and ChatGPT disagree (design, balance, code approach, reverting each other's work), do NOT override ChatGPT's work. Lay out both positions for Brian and let him decide.
+- Brian trusts Claude's judgment more: actively review ChatGPT's commits and proactively tell Brian about anything Claude disagrees with (bugs, balance, art/UX regressions, style), with a recommendation. He still makes the call.
 - Run the full test checklist below on any ChatGPT changes before merging them.
 
 ### Session checklist (every change)
