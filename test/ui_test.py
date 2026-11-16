@@ -85,6 +85,18 @@ with sync_playwright() as p:
     check(pg.locator('.up.closed').count() == 1, 'two paths bought -> third path closed')
     check('Damage' in pg.inner_text('.tp-sub'), 'tower panel shows damage stat')
     pg.keyboard.press('Escape')
+    # 8b. tower explanations: role tags, info sheet while placing, info from the tower panel
+    check(all(pg.inner_text(f'.card[data-v="{v}"] .role').strip() for v in ['archer','cannon','bard','mine']), 'every Armory card shows a role tag')
+    pg.click('.card[data-v="cannon"]'); pg.wait_for_timeout(80)
+    check('whole group' in pg.inner_text('#hudbar'), 'placement bar says what the tower does')
+    pg.click('[data-h="info"]'); pg.wait_for_timeout(80)
+    txt = pg.inner_text('#modal')
+    check('Glooms' in txt and 'Ragnarök Mortar' in txt and 'Good against' in txt.title() or 'GOOD AGAINST' in txt.upper(), 'info sheet: damage type, counters and all upgrade names')
+    pg.click('[data-m="resume"]'); pg.keyboard.press('Escape')
+    pg.mouse.click(t['x'], t['y']); pg.wait_for_timeout(80)
+    pg.click('.tp-role'); pg.wait_for_timeout(80)
+    check('Archer' in pg.inner_text('#modal') and 'Eagle Eye' in pg.inner_text('#modal'), 'tower panel opens the info sheet')
+    pg.click('[data-m="resume"]'); pg.keyboard.press('Escape')
     # 9. pause button freezes the sim
     pg.click('#startBtn'); pg.wait_for_timeout(300)
     pg.click('#pauseBtn'); t0 = pg.evaluate('__ss.game.time'); pg.wait_for_timeout(500)
@@ -141,6 +153,35 @@ with sync_playwright() as p:
     check(pg.locator('#modal.on .pw').count() == 5, 'Powers medallion opens the Powers inventory')
     gold = pg.evaluate('__ss.game.gold'); pg.click('[data-m="power:chest"]'); pg.wait_for_timeout(100)
     check(pg.evaluate('__ss.game.gold') == gold + 500, 'Treasure Chest +500')
+    check(errs == [], f'no page errors {errs}')
+    ctx.close()
+
+    # ------------------------------------------------ defeat recap + retry wave
+    print('defeat recap')
+    ctx = b.new_context(viewport={'width': 1366, 'height': 768}); pg = ctx.new_page(); errs = []
+    pg.on('pageerror', lambda e: errs.append(str(e)))
+    pg.goto(BASE + '&t=d9'); pg.wait_for_timeout(600)
+    new_game(pg, diff='easy')
+    c = pg.locator('.card[data-v="archer"]').bounding_box(); s = pg.evaluate(FIND_SPOT, True)
+    pg.mouse.move(c['x'] + 30, c['y'] + 30); pg.mouse.down(); pg.mouse.move(s['x'], s['y'], steps=4); pg.mouse.up()
+    pg.evaluate("__ss.game.round = 20; __ss.game.lives = 5; __ss.game.gold = 3000")
+    pg.click('#startBtn'); pg.keyboard.press('f'); pg.keyboard.press('f')
+    for _ in range(60):
+        pg.wait_for_timeout(500)
+        if pg.evaluate("__ss.game.state") == 'over': break
+    pg.wait_for_timeout(300)
+    txt = pg.inner_text('#modal')
+    check('What got through' in txt or 'WHAT GOT THROUGH' in txt.upper(), 'defeat recap lists what got through')
+    check(pg.locator('.rc-cause').count() == 1 and len(pg.inner_text('.rc-cause')) > 15, f'recap names a cause ({pg.inner_text(".rc-cause")[:70]})')
+    check(pg.locator('.rc-tips li').count() >= 1, 'recap gives tips')
+    if pg.locator('.rc-info').count():
+        pg.click('.rc-info >> nth=0'); pg.wait_for_timeout(80)
+        check(pg.locator('[data-m="recap"]').count() == 1, 'tip opens tower info with a way back')
+        pg.click('[data-m="recap"]'); pg.wait_for_timeout(80)
+    pw = pg.evaluate("JSON.stringify(JSON.parse(localStorage.getItem('shatterspire.profile.v1')).powers)")
+    pg.click('[data-m="retrywave"]'); pg.wait_for_timeout(200)
+    check(pg.evaluate('__ss.game.round') == 20 and pg.evaluate('__ss.game.state') == 'build' and pg.evaluate('__ss.game.lives') == 5 and pg.evaluate('__ss.game.towers.length') == 1, 'Retry wave restores the pre-wave state')
+    check(pg.evaluate("JSON.stringify(JSON.parse(localStorage.getItem('shatterspire.profile.v1')).powers)") == pw, 'retrying does not hand out powers')
     check(errs == [], f'no page errors {errs}')
     ctx.close()
 

@@ -11,12 +11,14 @@ import { TOWERS, TOWER_MAP, canUpgradePath } from './core/towers';
 import { HEROES, HERO_MAP, HERO_XP } from './core/heroes';
 import { PERKS, POWERS, canBuyPerk, powersEarned } from './core/progress';
 import { waveInfo, type WaveInfo } from './core/waves';
+import { analyzeDefeat } from './core/analysis';
 import { WORLD_H, WORLD_W, type Difficulty, type Targeting } from './core/types';
 import { Renderer, type Overlay } from './render/renderer';
 import { drawEnemyModel } from './render/enemyArt';
 import { ENEMIES } from './core/enemies';
 import { audio } from './audio/audio';
 import { ICON } from './ui/icons';
+import { DTYPE, baseStats, infoFor } from './ui/towerInfo';
 import { clearRun, heroUnlocked, loadProfile, loadRun, mapUnlocked, medalCount, perkPointsLeft, saveProfile, saveRun, towerUnlocked, type Profile } from './save';
 
 const $ = <T extends HTMLElement = HTMLElement>(sel: string) => document.querySelector(sel) as T;
@@ -139,14 +141,14 @@ document.addEventListener('pointerdown', (ev) => {
   if (!card || !game) return;
   audio.init();
   ev.preventDefault();
-  if (card.classList.contains('locked')) { audio.play('error'); toast(card.dataset.lock ?? 'Locked', 'bad'); return; }
+  if (card.classList.contains('locked')) { audio.play('click'); towerInfoModal(card.dataset.v!, false, card.dataset.lock); return; }
   if (card.classList.contains('deployed')) { const h = game.towers.find((t) => t.isHero); if (h) select(h); return; }
   try { card.setPointerCapture(ev.pointerId); } catch { /* not capturable (synthetic events) */ }
   drag = { id: card.dataset.v!, x: ev.clientX, y: ev.clientY, active: false, pid: ev.pointerId, el: card };
 });
 function activateDrag() {
   if (!drag || !game) return;
-  drag.active = true; select(null); cancelSpells(); placing = drag.id; ghost = undefined;
+  drag.active = true; hideTip(); select(null); cancelSpells(); placing = drag.id; ghost = undefined;
   document.body.classList.add('dragging');
 }
 window.addEventListener('pointermove', (ev) => {
@@ -355,6 +357,7 @@ side.addEventListener('click', (ev) => {
   else if (a === 'rally' && selected) { rallyEdit = rallyEdit ? null : selected; audio.play('click'); panelKey = ''; }
   else if (a === 'powers') powersMenu();
   else if (a === 'waveinfo') waveDetails();
+  else if (a === 'info' && selected) towerInfoModal(selected.defId, selected.isHero);
 });
 
 function buyUpgrade(p: number) {
@@ -418,13 +421,13 @@ function shopPanel() {
   const g = game!;
   let h = `<div class="side-title">Armory</div><div class="shop">`;
   const hd = g.heroDef;
-  h += `<button class="card hero" data-a="buy" data-v="hero" data-cost="${g.towerCost('hero')}" title="${esc(hd.desc)}">${img(hd.id, true)}<div class="nm">${esc(hd.name)}</div><div class="cost">${ICON.coinSmall}<span>${fmt(g.towerCost('hero'))}</span></div></button>`;
+  h += `<button class="card hero" data-a="buy" data-v="hero" data-cost="${g.towerCost('hero')}">${img(hd.id, true)}<div class="nm">${esc(hd.name)}</div><div class="role">Hero</div><div class="cost">${ICON.coinSmall}<span>${fmt(g.towerCost('hero'))}</span></div></button>`;
   for (const d of TOWERS) {
     const un = towerUnlocked(profile, d.id);
     const cost = g.towerCost(d.id);
     h += un
-      ? `<button class="card" data-a="buy" data-v="${d.id}" data-cost="${cost}" title="${esc(d.name)}: ${esc(d.desc)}">${img(d.id)}<div class="nm">${esc(d.name)}</div><div class="cost">${ICON.coinSmall}<span>${fmt(cost)}</span></div></button>`
-      : `<button class="card locked" data-a="buy" data-v="${d.id}" data-lock="${esc(d.name)} unlocks after ${d.unlockRounds} rounds played (${d.unlockRounds - profile.totalRounds} to go)">${img(d.id)}<div class="nm">${esc(d.name)}</div><div class="cost">${ICON.lock.replace('class="ico"', 'class="ico sm"')} ${d.unlockRounds - profile.totalRounds}</div></button>`;
+      ? `<button class="card" data-a="buy" data-v="${d.id}" data-cost="${cost}">${img(d.id)}<div class="nm">${esc(d.name)}</div><div class="role">${esc(infoFor(d.id, false).tag)}</div><div class="cost">${ICON.coinSmall}<span>${fmt(cost)}</span></div></button>`
+      : `<button class="card locked" data-a="buy" data-v="${d.id}" data-lock="${esc(d.name)} unlocks after ${d.unlockRounds} rounds played (${d.unlockRounds - profile.totalRounds} to go)">${img(d.id)}<div class="nm">${esc(d.name)}</div><div class="role">${esc(infoFor(d.id, false).tag)}</div><div class="cost">${ICON.lock.replace('class="ico"', 'class="ico sm"')} ${d.unlockRounds - profile.totalRounds}</div></button>`;
   }
   h += `</div><div class="row"><button class="btn btn3d blueb" data-a="powers">${ICON.sparkle} Powers <span id="pwN"></span></button></div>
     <div class="hint" id="shopHint"></div>`;
@@ -441,7 +444,6 @@ function updateShop() {
       const dep = g.heroPlaced;
       if (el.classList.contains('deployed') !== dep) {
         el.classList.toggle('deployed', dep);
-        el.title = dep ? `${g.heroDef.name} is on the field: tap to select` : g.heroDef.desc;
         const c = el.querySelector('.cost');
         if (c) c.innerHTML = dep ? '<span>Deployed</span>' : `${ICON.coinSmall}<span>${fmt(cost)}</span>`;
         if (dep) { el.removeAttribute('data-cost'); el.classList.remove('poor'); } else el.dataset.cost = String(cost);
@@ -459,7 +461,11 @@ function updateShop() {
 
 function towerPanel(t: Tower) {
   const g = game!;
-  const head = (name: string, isHero: boolean) => `<div class="tp-head">${img(t.defId, isHero)}<div><div class="tp-name">${esc(name)}</div><div class="tp-sub"></div></div><button class="tp-x btn3d redb" data-a="close" title="Close (Esc)">${ICON.close}</button></div>`;
+  const head = (name: string, isHero: boolean) => {
+    const inf = infoFor(t.defId, isHero), dt = DTYPE[baseStats(t.defId, isHero).dtype];
+    return `<div class="tp-head">${img(t.defId, isHero)}<div><div class="tp-name">${esc(name)}</div><div class="tp-sub"></div></div><button class="tp-x btn3d redb" data-a="close" title="Close (Esc)">${ICON.close}</button></div>
+    <button class="tp-role" data-a="info" title="What this tower does">${ICON.info}<span><b>${esc(inf.tag)}</b> · ${esc(dt.name)} damage. ${esc(inf.line)}</span></button>`;
+  };
   let h = '';
   if (t.isHero) {
     const hd = HERO_MAP[t.defId];
@@ -493,6 +499,53 @@ function towerPanel(t: Tower) {
   return h;
 }
 
+// ================================================================ tower info: hover tip (mouse) + full info sheet
+function infoBody(defId: string, isHero: boolean, compact: boolean) {
+  const inf = infoFor(defId, isHero), st = baseStats(defId, isHero), dt = DTYPE[st.dtype];
+  const rows = st.rows.map(([k, v]) => `<div class="ti-row"><span>${esc(k)}</span><b>${esc(v)}</b></div>`).join('');
+  const good = inf.good.map((x) => `<li>${esc(x)}</li>`).join(''), weak = inf.weak.map((x) => `<li>${esc(x)}</li>`).join('');
+  let h = `<div class="ti-line">${esc(inf.line)}</div>
+    <div class="ti-dt"><span class="chip">${esc(dt.name.toUpperCase())}</span> ${esc(dt.blocked)}</div>
+    ${compact ? '' : `<div class="ti-stats">${rows}</div>`}
+    <div class="ti-gw"><div><div class="ti-h good">Good against</div><ul>${good}</ul></div><div><div class="ti-h weak">Weak against</div><ul>${weak}</ul></div></div>`;
+  if (!compact && !isHero) {
+    const d = TOWER_MAP[defId];
+    h += `<div class="ti-h">Upgrade paths (pick 2, only one past tier 2)</div><div class="ti-paths">${d.paths.map((pn, p) => `<div class="ti-path"><div class="path-h p${p}">${esc(pn)}</div><ol>${d.upgrades[p].map((u) => `<li><b>${esc(u.name)}</b><span>${esc(u.desc)}</span></li>`).join('')}</ol></div>`).join('')}</div>`;
+  }
+  if (!compact && isHero) {
+    const hd = HERO_MAP[defId];
+    h += `<div class="ti-h">Abilities</div><ul class="ti-ab">${hd.abilities.map((a) => `<li><b>Lv ${a.level}: ${esc(a.def.name)}</b> ${esc(a.desc)}</li>`).join('')}</ul><div class="hint">Heroes level up every wave (max 10).</div>`;
+  }
+  return h;
+}
+function towerInfoModal(defId: string, isHero: boolean, lockNote?: string) {
+  const name = isHero ? HERO_MAP[defId].name : TOWER_MAP[defId].name;
+  const cost = game ? game.towerCost(isHero ? 'hero' : defId) : isHero ? HERO_MAP[defId].cost : TOWER_MAP[defId].cost;
+  modal(`<div class="ti-head">${img(defId, isHero, 64)}<div><h2>${esc(name)}</h2><div class="ti-cost">${ICON.coinSmall} ${fmt(cost)} · <b>${esc(infoFor(defId, isHero).tag)}</b></div></div></div>
+    ${lockNote ? `<div class="hint" style="color:#8a1610">🔒 ${esc(lockNote)}</div>` : ''}
+    <div class="ti">${infoBody(defId, isHero, false)}</div>
+    <button class="mbtn btn3d gilt" data-m="resume">Got it</button>`);
+}
+const tip = document.createElement('div'); tip.id = 'tip'; document.body.appendChild(tip);
+let tipFor = '';
+function hideTip() { tip.classList.remove('on'); tipFor = ''; }
+document.addEventListener('pointerover', (ev) => {
+  if (ev.pointerType !== 'mouse' || drag) return;
+  const card = (ev.target as HTMLElement).closest('.card[data-v]') as HTMLElement | null;
+  if (!card || !game) { if (tipFor && !(ev.target as HTMLElement).closest('#tip')) hideTip(); return; }
+  const id = card.dataset.v!, isHero = id === 'hero', defId = isHero ? game.heroDef.id : id;
+  if (tipFor === id) return;
+  tipFor = id;
+  const name = isHero ? game.heroDef.name : TOWER_MAP[id].name;
+  tip.innerHTML = `<div class="tip-h"><b>${esc(name)}</b><span class="chip">${esc(infoFor(defId, isHero).tag)}</span></div><div class="ti">${infoBody(defId, isHero, true)}</div><div class="tip-f">Drag onto the map to build · click ${ICON.info} Info for upgrades</div>`;
+  const r = card.getBoundingClientRect(), sr = $('#side').getBoundingClientRect();
+  tip.classList.add('on');
+  const th = tip.offsetHeight;
+  tip.style.left = `${Math.max(8, sr.left - tip.offsetWidth - 10)}px`;
+  tip.style.top = `${Math.max(8, Math.min(window.innerHeight - th - 8, r.top + r.height / 2 - th / 2))}px`;
+});
+document.addEventListener('pointerdown', hideTip, true);
+
 // ================================================================ field HUD bar: placement / aiming / rally instructions
 const hudbar = $('#hudbar');
 let hudKey = '';
@@ -506,7 +559,8 @@ function renderHud() {
     const status = !ghost ? (drag ? 'Drop it on the map' : matchMedia('(pointer: coarse)').matches ? 'Tap the map to build' : 'Click the map to build') : ghost.valid ? (drag ? 'Release to build here' : 'Tap to build here') : ghost.reason ?? 'Can\'t build here';
     const bad = !!ghost && !ghost.valid;
     key = `p|${placing}|${cost}|${status}|${bad}`;
-    html = `<div class="hb ${bad ? 'bad' : ''}">${img(placing === 'hero' ? g.heroDef.id : placing, placing === 'hero', 34)}<div class="hb-t"><b>${esc(nm)} · ${cost === 0 ? 'FREE' : fmt(cost)}g</b><span>${esc(status)}${placing === 'barracks' && ghost?.valid ? ' · flag = where soldiers stand' : ''}</span></div><button class="hb-x btn3d redb" data-h="cancel">${ICON.close}<span>Cancel</span></button></div>`;
+    const inf = infoFor(placing === 'hero' ? g.heroDef.id : placing, placing === 'hero');
+    html = `<div class="hb ${bad ? 'bad' : ''}">${img(placing === 'hero' ? g.heroDef.id : placing, placing === 'hero', 34)}<div class="hb-t"><b>${esc(nm)} · ${cost === 0 ? 'FREE' : fmt(cost)}g</b><span class="hb-line">${esc(inf.line)}</span><span class="hb-st">${bad ? '✖ ' : '✔ '}${esc(status)}${placing === 'barracks' && ghost?.valid ? ' · flag = where soldiers stand' : ''}</span></div><div class="hb-btns"><button class="hb-x btn3d blueb" data-h="info">${ICON.info}<span>Info</span></button><button class="hb-x btn3d redb" data-h="cancel">${ICON.close}<span>Cancel</span></button></div></div>`;
   } else if (armedSpell) {
     const sp = g.spells.find((s) => s.id === armedSpell)!;
     key = `s|${armedSpell}`;
@@ -524,6 +578,7 @@ hudbar.addEventListener('pointerdown', (ev) => {
   const el = (ev.target as HTMLElement).closest('[data-h]') as HTMLElement | null;
   if (!el) return;
   ev.stopPropagation(); audio.play('click');
+  if (el.dataset.h === 'info' && placing && game) { towerInfoModal(placing === 'hero' ? game.heroDef.id : placing, placing === 'hero'); return; }
   cancelPlacing(); cancelSpells(); panelKey = '';
 });
 
@@ -612,6 +667,20 @@ coach.addEventListener('pointerdown', (ev) => {
 
 // ================================================================ events
 const SHOT_SOUND: Record<string, string> = { arrow: 'bow', firearrow: 'bow', thorn: 'bow', shard: 'bow', star: 'fire', fireball: 'fire', comet: 'fire', bomb: 'cannon', bolt: 'zap', ballista: 'ballista', sweep: 'swing', frost: 'frost', potion: 'potion', vine: 'whip' };
+const leakAgg: Record<string, { n: number; lives: number }> = {};
+let leakTimer = 0;
+/** One ribbon per burst of leaks: "Leaked: 3 Ogres, 1 Troll (−19 lives)". */
+function flushLeaks() {
+  leakTimer = 0;
+  const ents = Object.entries(leakAgg).sort((a, b) => b[1].lives - a[1].lives);
+  if (!ents.length) return;
+  const total = ents.reduce((s, [, v]) => s + v.lives, 0);
+  const what = ents.slice(0, 2).map(([n, v]) => `${v.n} ${n}${v.n > 1 && !n.endsWith('s') ? 's' : ''}`).join(', ') + (ents.length > 2 ? '…' : '');
+  for (const k of Object.keys(leakAgg)) delete leakAgg[k];
+  if (game && game.state === 'over') return;
+  toast(`Leaked: ${what} (−${fmt(total)} lives)`, 'bad');
+  const sb = document.querySelector('.stat.lives'); if (sb) { sb.classList.remove('hit'); void (sb as HTMLElement).offsetWidth; sb.classList.add('hit'); }
+}
 function handleEvents() {
   if (!game) return;
   const g = game;
@@ -620,7 +689,7 @@ function handleEvents() {
       case 'pop': audio.play(e.big ? 'bigpop' : 'pop', { x: e.x }); break;
       case 'shoot': audio.play(SHOT_SOUND[e.kind] ?? 'bow', { x: e.x }); break;
       case 'boom': audio.play('boom', { x: e.x }); break;
-      case 'leak': audio.play('leak'); if (e.lives >= 50) toast(`A giant broke through: −${fmt(e.lives)} lives!`, 'bad'); break;
+      case 'leak': audio.play('leak'); { const l = (leakAgg[e.name] ??= { n: 0, lives: 0 }); l.n++; l.lives += e.lives; if (!leakTimer) leakTimer = window.setTimeout(flushLeaks, 700); } break;
       case 'waveStart': audio.play(e.boss ? 'boss' : 'wave'); if (e.boss) toast('⚠ Boss wave!', 'bad'); break;
       case 'waveEnd': onWaveEnd(e.round); break;
       case 'levelUp': audio.play('level'); toast(`Hero reached level ${e.level}!`, 'good'); break;
@@ -648,6 +717,10 @@ function onWaveEnd(round: number) {
   if (game.state === 'build' && !wi.freeplay) { const big = wi.threats.find((t) => t.danger); if (big) toast(`Next: ${big.tag}. Check Details`, 'bad'); }
 }
 
+/** Powers earned by a defeat are granted when the player leaves the run (not on Retry, so retries can't farm them). */
+let pendingPowers: string[] = [];
+function grantPending() { for (const p of pendingPowers) profile.powers[p] = (profile.powers[p] ?? 0) + 1; if (pendingPowers.length) saveProfile(profile); pendingPowers = []; }
+let recapHtml = '';
 function onGameEnd(won: boolean) {
   if (!game || endHandled) return;
   endHandled = true;
@@ -655,26 +728,56 @@ function onGameEnd(won: boolean) {
   const g = game;
   audio.play(won ? 'win' : 'lose');
   const earned = powersEarned(g.round, won);
-  for (const p of earned) profile.powers[p] = (profile.powers[p] ?? 0) + 1;
-  let medal = '';
+  const pwIcons = earned.map((id) => POWERS.find((p) => p.id === id)!.icon).join(' ');
+  const top = g.towers.filter((t) => !t.isHero || t.dmg > 0).sort((a, b) => b.dmg - a.dmg).slice(0, 3)
+    .map((t) => `<li><b>${esc(t.isHero ? HERO_MAP[t.defId].name : TOWER_MAP[t.defId].name)}</b>: ${fmtShort(t.dmg)} damage</li>`).join('');
   if (won) {
+    for (const p of earned) profile.powers[p] = (profile.powers[p] ?? 0) + 1;
+    let medal = '';
     const m = (profile.medals[g.map.id] ??= {});
     if (!m[g.diff]) medal = `🏅 New medal: ${g.map.name} (${DIFF[g.diff].label})! +1 knowledge point`;
     m[g.diff] = 1;
+    saveProfile(profile);
+    modal(`<h2>🏆 Victory!</h2>
+      <div class="hint">You held ${esc(g.map.name)} through all ${g.totalWaves} waves. Unspent gold: ${fmtShort(g.gold)}</div>
+      ${top ? `<ul class="wlist">${top}</ul>` : ''}
+      ${medal ? `<div class="hint" style="color:#a8680f">${medal}</div>` : ''}${earned.length ? `<div class="hint">Powers earned: ${pwIcons}</div>` : ''}
+      <button class="mbtn big btn3d gilt" data-m="freeplay">Continue: Freeplay</button>
+      <button class="mbtn btn3d woodb" data-m="restart">Restart</button>
+      <button class="mbtn btn3d woodb" data-m="menu">Main Menu</button>`);
+    return;
   }
-  saveProfile(profile);
-  if (!won) clearRun();
-  const pw = earned.length ? `<div class="hint">Powers earned: ${earned.map((id) => POWERS.find((p) => p.id === id)!.icon).join(' ')}</div>` : '';
-  const top = g.towers.filter((t) => !t.isHero || t.dmg > 0).sort((a, b) => b.dmg - a.dmg).slice(0, 3)
-    .map((t) => `<li><b>${esc(t.isHero ? HERO_MAP[t.defId].name : TOWER_MAP[t.defId].name)}</b>: ${fmtShort(t.dmg)} damage</li>`).join('');
-  modal(`
-    <h2>${won ? '🏆 Victory!' : '💀 The Spire Has Fallen'}</h2>
-    <div class="hint">${won ? `You held ${g.map.name} through all ${g.totalWaves} waves.` : `You survived ${g.round - 1} wave${g.round === 2 ? '' : 's'}.`} Unspent gold: ${fmtShort(g.gold)}</div>
-    ${top ? `<ul class="wlist">${top}</ul>` : ''}
-    ${medal ? `<div class="hint" style="color:#a8680f">${medal}</div>` : ''}${pw}
-    ${won ? '<button class="mbtn big btn3d gilt" data-m="freeplay">Continue: Freeplay</button>' : ''}
-    <button class="mbtn btn3d woodb" data-m="restart">Restart</button>
-    <button class="mbtn btn3d woodb" data-m="menu">Main Menu</button>`);
+  pendingPowers = earned;
+  const rc = analyzeDefeat(g);
+  const maxLeak = Math.max(1, ...rc.leaks.map((l) => l.lives));
+  const leakRows = rc.leaks.slice(0, 5).map((l) => `<div class="rc-leak"><span class="rc-ln">${l.n}× ${esc(l.name)}</span><span class="rc-bar"><i style="width:${Math.max(6, (l.lives / maxLeak) * 100)}%"></i></span><b>−${fmt(l.lives)}</b></div>`).join('');
+  const maxH = Math.max(1, ...rc.history.map((h) => h.lost));
+  const hist = rc.history.map((h) => `<div class="rc-col ${h.round === rc.round ? 'last' : ''}" title="Wave ${h.round}: −${h.lost} lives"><i style="height:${h.lost ? Math.max(8, (h.lost / maxH) * 100) : 2}%"></i><span>${h.round}</span></div>`).join('');
+  const tips = rc.tips.map((t) => `<li>${esc(t.text)}${t.tower ? ` <button class="rc-info" data-m="tinfo:${t.tower}">${ICON.info} ${esc(TOWER_MAP[t.tower].name)}</button>` : ''}</li>`).join('');
+  const canRetry = !!g.waveStartSave;
+  recapHtml = `<h2>💀 The Spire Has Fallen</h2>
+    <div class="hint">${esc(g.map.name)} · ${DIFF[g.diff].label} · fell on wave ${rc.round}</div>
+    <div class="rc-cause">${esc(rc.cause)}</div>
+    ${leakRows ? `<div class="ti-h">What got through on wave ${rc.round}</div><div class="rc-leaks">${leakRows}</div>` : ''}
+    ${rc.history.length > 1 ? `<div class="ti-h">Lives lost per wave</div><div class="rc-hist">${hist}</div>` : ''}
+    ${tips ? `<div class="ti-h">How to hold next time</div><ul class="rc-tips">${tips}</ul>` : ''}
+    ${top ? `<details class="rc-more"><summary>Your top towers</summary><ul class="wlist">${top}</ul></details>` : ''}
+    ${canRetry ? `<button class="mbtn big btn3d gilt" data-m="retrywave">↻ Retry wave ${rc.round}</button><div class="hint rc-small">Restarts this wave with your defenses as they were before it began, so you can rebuild.</div>` : ''}
+    <button class="mbtn btn3d woodb" data-m="restart">Restart map</button>
+    <button class="mbtn btn3d woodb" data-m="menu">Main Menu</button>
+    ${earned.length ? `<div class="hint rc-small">Powers ${pwIcons} are yours when you leave this run.</div>` : ''}`;
+  modal(recapHtml);
+}
+
+function retryWave() {
+  if (!game || !game.waveStartSave) return;
+  const hist = game.history.slice(0, -1);
+  const g = Game.restore(game.waveStartSave, profile.perks);
+  g.history = hist;
+  game = g;
+  saveRun(g);
+  beginSession();
+  toast(`Wave ${g.round + 1}: rebuild, then press Start`, 'info');
 }
 
 // ================================================================ modal + menus
@@ -688,8 +791,11 @@ modalEl.addEventListener('click', (ev) => {
   const m = el.dataset.m!;
   if (m === 'resume') closeModal();
   else if (m === 'freeplay') { game?.continueFreeplay(); endHandled = false; closeModal(); if (game) saveRun(game); }
-  else if (m === 'restart') { if (game) { clearRun(); startGame(game.map.id, game.diff, game.heroId); } closeModal(); }
-  else if (m === 'menu') { if (game && game.state === 'build' && game.round > 0) saveRun(game); closeModal(); showMenu('main'); }
+  else if (m === 'restart') { grantPending(); if (game) { clearRun(); startGame(game.map.id, game.diff, game.heroId); } closeModal(); }
+  else if (m === 'retrywave') { closeModal(); retryWave(); }
+  else if (m.startsWith('tinfo:')) { towerInfoModal(m.slice(6), false); const btn = modalEl.querySelector('[data-m="resume"]'); if (btn && recapHtml && game?.state === 'over') { btn.setAttribute('data-m', 'recap'); btn.textContent = '‹ Back to recap'; } }
+  else if (m === 'recap') modal(recapHtml);
+  else if (m === 'menu') { grantPending(); if (game && game.state === 'over') clearRun(); else if (game && game.state === 'build' && game.round > 0) saveRun(game); closeModal(); showMenu('main'); }
   else if (m === 'auto') { toggleAuto(); pauseMenu(); }
   else if (m === 'sfx') { profile.settings.sfx = !profile.settings.sfx; audio.setSfx(profile.settings.sfx); saveProfile(profile); pauseMenu(); }
   else if (m === 'music') { profile.settings.music = !profile.settings.music; audio.setMusic(profile.settings.music); saveProfile(profile); pauseMenu(); }

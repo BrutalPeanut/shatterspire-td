@@ -48,7 +48,7 @@ export type GameEvent =
   | { type: 'pop'; x: number; y: number; big: boolean }
   | { type: 'shoot'; kind: string; x: number }
   | { type: 'boom'; x: number }
-  | { type: 'leak'; lives: number }
+  | { type: 'leak'; lives: number; name: string }
   | { type: 'waveStart'; round: number; boss: boolean }
   | { type: 'waveEnd'; round: number; reward: number }
   | { type: 'gameOver' }
@@ -329,8 +329,19 @@ export class Game {
   // ---------------------------------------------------------- waves
   isBossWave(r: number) { return r === 20 || r === 30 || r === 40 || (r > 40 && r % 10 === 0); }
 
+  /** Leaks during the current wave, by enemy type (for the defeat recap). */
+  waveLeaks: Record<string, { type: string; name: string; n: number; lives: number; shadow: boolean; regen: boolean; fort: boolean }> = {};
+  /** Lives lost per finished (or failed) wave. */
+  history: { round: number; lost: number }[] = [];
+  /** Snapshot taken just before the current wave started, so a lost wave can be retried. */
+  waveStartSave: ReturnType<Game['serialize']> | null = null;
+  private livesAtWaveStart = 0;
+
   startWave() {
     if (this.state !== 'build') return;
+    this.waveStartSave = this.serialize();
+    this.waveLeaks = {};
+    this.livesAtWaveStart = this.lives;
     this.round++;
     this.state = 'wave';
     this.waveTime = 0;
@@ -371,7 +382,7 @@ export class Game {
   }
 
   // ---------------------------------------------------------- damage
-  canHurt(e: Enemy, dtype: DamageType, t: Tower): boolean {
+  canHurt(e: Pick<Enemy, 'def'>, dtype: DamageType, t: Tower): boolean {
     const im = e.def.immune;
     if (!im.length) return true;
     if (dtype === 'pure' || dtype === 'acid') return true;
@@ -520,7 +531,7 @@ export class Game {
     this.updateGround(dt);
     this.tickAbilities(dt, true);
     this.enemies = this.enemies.filter((e) => !e.dead);
-    if (this.lives <= 0) { this.lives = 0; this.state = 'over'; this.events.push({ type: 'gameOver' }); return; }
+    if (this.lives <= 0) { this.history.push({ round: this.round, lost: this.livesAtWaveStart }); this.lives = 0; this.state = 'over'; this.events.push({ type: 'gameOver' }); return; }
     if (!this.queue.length && !this.enemies.length) this.endWave();
   }
 
@@ -547,6 +558,7 @@ export class Game {
     }
     this.projectiles = [];
     this.ground = [];
+    this.history.push({ round: r, lost: Math.max(0, this.livesAtWaveStart - this.lives) });
     this.events.push({ type: 'waveEnd', round: r, reward: reward + interest });
     if (r === FINAL_WAVE && !this.freeplay) { this.state = 'victory'; this.events.push({ type: 'victory' }); }
     else this.state = 'build';
@@ -595,7 +607,9 @@ export class Game {
         this.lives -= lost;
         this.stats.leaked += lost;
         this.stats.leakedBy[e.def.name] = (this.stats.leakedBy[e.def.name] ?? 0) + lost;
-        this.events.push({ type: 'leak', lives: lost });
+        this.events.push({ type: 'leak', lives: lost, name: e.def.name });
+        const wl = (this.waveLeaks[e.type] ??= { type: e.type, name: e.def.name, n: 0, lives: 0, shadow: false, regen: false, fort: false });
+        wl.n++; wl.lives += lost; wl.shadow ||= e.shadow; wl.regen ||= e.regen; wl.fort ||= e.fortified;
         continue;
       }
       e.angle = pointAt(p, e.d, e);
