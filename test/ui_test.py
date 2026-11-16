@@ -85,6 +85,18 @@ with sync_playwright() as p:
     check(pg.locator('.up.closed').count() == 1, 'two paths bought -> third path closed')
     check('Damage' in pg.inner_text('.tp-sub'), 'tower panel shows damage stat')
     pg.keyboard.press('Escape')
+    # 8b. tower explanations: role tags, info sheet while placing, info from the tower panel
+    check(all(pg.inner_text(f'.card[data-v="{v}"] .role').strip() for v in ['archer','cannon','bard','mine']), 'every Armory card shows a role tag')
+    pg.click('.card[data-v="cannon"]'); pg.wait_for_timeout(80)
+    check('whole group' in pg.inner_text('#hudbar'), 'placement bar says what the tower does')
+    pg.click('[data-h="info"]'); pg.wait_for_timeout(80)
+    txt = pg.inner_text('#modal')
+    check('Glooms' in txt and 'Ragnarök Mortar' in txt and 'Good against' in txt.title() or 'GOOD AGAINST' in txt.upper(), 'info sheet: damage type, counters and all upgrade names')
+    pg.click('[data-m="resume"]'); pg.keyboard.press('Escape')
+    pg.mouse.click(t['x'], t['y']); pg.wait_for_timeout(80)
+    pg.click('.tp-role'); pg.wait_for_timeout(80)
+    check('Archer' in pg.inner_text('#modal') and 'Eagle Eye' in pg.inner_text('#modal'), 'tower panel opens the info sheet')
+    pg.click('[data-m="resume"]'); pg.keyboard.press('Escape')
     # 9. pause button freezes the sim
     pg.click('#startBtn'); pg.wait_for_timeout(300)
     pg.click('#pauseBtn'); t0 = pg.evaluate('__ss.game.time'); pg.wait_for_timeout(500)

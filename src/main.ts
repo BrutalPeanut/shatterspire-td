@@ -17,6 +17,7 @@ import { drawEnemyModel } from './render/enemyArt';
 import { ENEMIES } from './core/enemies';
 import { audio } from './audio/audio';
 import { ICON } from './ui/icons';
+import { DTYPE, baseStats, infoFor } from './ui/towerInfo';
 import { clearRun, heroUnlocked, loadProfile, loadRun, mapUnlocked, medalCount, perkPointsLeft, saveProfile, saveRun, towerUnlocked, type Profile } from './save';
 
 const $ = <T extends HTMLElement = HTMLElement>(sel: string) => document.querySelector(sel) as T;
@@ -139,14 +140,14 @@ document.addEventListener('pointerdown', (ev) => {
   if (!card || !game) return;
   audio.init();
   ev.preventDefault();
-  if (card.classList.contains('locked')) { audio.play('error'); toast(card.dataset.lock ?? 'Locked', 'bad'); return; }
+  if (card.classList.contains('locked')) { audio.play('click'); towerInfoModal(card.dataset.v!, false, card.dataset.lock); return; }
   if (card.classList.contains('deployed')) { const h = game.towers.find((t) => t.isHero); if (h) select(h); return; }
   try { card.setPointerCapture(ev.pointerId); } catch { /* not capturable (synthetic events) */ }
   drag = { id: card.dataset.v!, x: ev.clientX, y: ev.clientY, active: false, pid: ev.pointerId, el: card };
 });
 function activateDrag() {
   if (!drag || !game) return;
-  drag.active = true; select(null); cancelSpells(); placing = drag.id; ghost = undefined;
+  drag.active = true; hideTip(); select(null); cancelSpells(); placing = drag.id; ghost = undefined;
   document.body.classList.add('dragging');
 }
 window.addEventListener('pointermove', (ev) => {
@@ -355,6 +356,7 @@ side.addEventListener('click', (ev) => {
   else if (a === 'rally' && selected) { rallyEdit = rallyEdit ? null : selected; audio.play('click'); panelKey = ''; }
   else if (a === 'powers') powersMenu();
   else if (a === 'waveinfo') waveDetails();
+  else if (a === 'info' && selected) towerInfoModal(selected.defId, selected.isHero);
 });
 
 function buyUpgrade(p: number) {
@@ -418,13 +420,13 @@ function shopPanel() {
   const g = game!;
   let h = `<div class="side-title">Armory</div><div class="shop">`;
   const hd = g.heroDef;
-  h += `<button class="card hero" data-a="buy" data-v="hero" data-cost="${g.towerCost('hero')}" title="${esc(hd.desc)}">${img(hd.id, true)}<div class="nm">${esc(hd.name)}</div><div class="cost">${ICON.coinSmall}<span>${fmt(g.towerCost('hero'))}</span></div></button>`;
+  h += `<button class="card hero" data-a="buy" data-v="hero" data-cost="${g.towerCost('hero')}">${img(hd.id, true)}<div class="nm">${esc(hd.name)}</div><div class="role">Hero</div><div class="cost">${ICON.coinSmall}<span>${fmt(g.towerCost('hero'))}</span></div></button>`;
   for (const d of TOWERS) {
     const un = towerUnlocked(profile, d.id);
     const cost = g.towerCost(d.id);
     h += un
-      ? `<button class="card" data-a="buy" data-v="${d.id}" data-cost="${cost}" title="${esc(d.name)}: ${esc(d.desc)}">${img(d.id)}<div class="nm">${esc(d.name)}</div><div class="cost">${ICON.coinSmall}<span>${fmt(cost)}</span></div></button>`
-      : `<button class="card locked" data-a="buy" data-v="${d.id}" data-lock="${esc(d.name)} unlocks after ${d.unlockRounds} rounds played (${d.unlockRounds - profile.totalRounds} to go)">${img(d.id)}<div class="nm">${esc(d.name)}</div><div class="cost">${ICON.lock.replace('class="ico"', 'class="ico sm"')} ${d.unlockRounds - profile.totalRounds}</div></button>`;
+      ? `<button class="card" data-a="buy" data-v="${d.id}" data-cost="${cost}">${img(d.id)}<div class="nm">${esc(d.name)}</div><div class="role">${esc(infoFor(d.id, false).tag)}</div><div class="cost">${ICON.coinSmall}<span>${fmt(cost)}</span></div></button>`
+      : `<button class="card locked" data-a="buy" data-v="${d.id}" data-lock="${esc(d.name)} unlocks after ${d.unlockRounds} rounds played (${d.unlockRounds - profile.totalRounds} to go)">${img(d.id)}<div class="nm">${esc(d.name)}</div><div class="role">${esc(infoFor(d.id, false).tag)}</div><div class="cost">${ICON.lock.replace('class="ico"', 'class="ico sm"')} ${d.unlockRounds - profile.totalRounds}</div></button>`;
   }
   h += `</div><div class="row"><button class="btn btn3d blueb" data-a="powers">${ICON.sparkle} Powers <span id="pwN"></span></button></div>
     <div class="hint" id="shopHint"></div>`;
@@ -441,7 +443,6 @@ function updateShop() {
       const dep = g.heroPlaced;
       if (el.classList.contains('deployed') !== dep) {
         el.classList.toggle('deployed', dep);
-        el.title = dep ? `${g.heroDef.name} is on the field: tap to select` : g.heroDef.desc;
         const c = el.querySelector('.cost');
         if (c) c.innerHTML = dep ? '<span>Deployed</span>' : `${ICON.coinSmall}<span>${fmt(cost)}</span>`;
         if (dep) { el.removeAttribute('data-cost'); el.classList.remove('poor'); } else el.dataset.cost = String(cost);
@@ -459,7 +460,11 @@ function updateShop() {
 
 function towerPanel(t: Tower) {
   const g = game!;
-  const head = (name: string, isHero: boolean) => `<div class="tp-head">${img(t.defId, isHero)}<div><div class="tp-name">${esc(name)}</div><div class="tp-sub"></div></div><button class="tp-x btn3d redb" data-a="close" title="Close (Esc)">${ICON.close}</button></div>`;
+  const head = (name: string, isHero: boolean) => {
+    const inf = infoFor(t.defId, isHero), dt = DTYPE[baseStats(t.defId, isHero).dtype];
+    return `<div class="tp-head">${img(t.defId, isHero)}<div><div class="tp-name">${esc(name)}</div><div class="tp-sub"></div></div><button class="tp-x btn3d redb" data-a="close" title="Close (Esc)">${ICON.close}</button></div>
+    <button class="tp-role" data-a="info" title="What this tower does">${ICON.info}<span><b>${esc(inf.tag)}</b> · ${esc(dt.name)} damage. ${esc(inf.line)}</span></button>`;
+  };
   let h = '';
   if (t.isHero) {
     const hd = HERO_MAP[t.defId];
@@ -493,6 +498,53 @@ function towerPanel(t: Tower) {
   return h;
 }
 
+// ================================================================ tower info: hover tip (mouse) + full info sheet
+function infoBody(defId: string, isHero: boolean, compact: boolean) {
+  const inf = infoFor(defId, isHero), st = baseStats(defId, isHero), dt = DTYPE[st.dtype];
+  const rows = st.rows.map(([k, v]) => `<div class="ti-row"><span>${esc(k)}</span><b>${esc(v)}</b></div>`).join('');
+  const good = inf.good.map((x) => `<li>${esc(x)}</li>`).join(''), weak = inf.weak.map((x) => `<li>${esc(x)}</li>`).join('');
+  let h = `<div class="ti-line">${esc(inf.line)}</div>
+    <div class="ti-dt"><span class="chip">${esc(dt.name.toUpperCase())}</span> ${esc(dt.blocked)}</div>
+    ${compact ? '' : `<div class="ti-stats">${rows}</div>`}
+    <div class="ti-gw"><div><div class="ti-h good">Good against</div><ul>${good}</ul></div><div><div class="ti-h weak">Weak against</div><ul>${weak}</ul></div></div>`;
+  if (!compact && !isHero) {
+    const d = TOWER_MAP[defId];
+    h += `<div class="ti-h">Upgrade paths (pick 2, only one past tier 2)</div><div class="ti-paths">${d.paths.map((pn, p) => `<div class="ti-path"><div class="path-h p${p}">${esc(pn)}</div><ol>${d.upgrades[p].map((u) => `<li><b>${esc(u.name)}</b><span>${esc(u.desc)}</span></li>`).join('')}</ol></div>`).join('')}</div>`;
+  }
+  if (!compact && isHero) {
+    const hd = HERO_MAP[defId];
+    h += `<div class="ti-h">Abilities</div><ul class="ti-ab">${hd.abilities.map((a) => `<li><b>Lv ${a.level}: ${esc(a.def.name)}</b> ${esc(a.desc)}</li>`).join('')}</ul><div class="hint">Heroes level up every wave (max 10).</div>`;
+  }
+  return h;
+}
+function towerInfoModal(defId: string, isHero: boolean, lockNote?: string) {
+  const name = isHero ? HERO_MAP[defId].name : TOWER_MAP[defId].name;
+  const cost = game ? game.towerCost(isHero ? 'hero' : defId) : isHero ? HERO_MAP[defId].cost : TOWER_MAP[defId].cost;
+  modal(`<div class="ti-head">${img(defId, isHero, 64)}<div><h2>${esc(name)}</h2><div class="ti-cost">${ICON.coinSmall} ${fmt(cost)} · <b>${esc(infoFor(defId, isHero).tag)}</b></div></div></div>
+    ${lockNote ? `<div class="hint" style="color:#8a1610">🔒 ${esc(lockNote)}</div>` : ''}
+    <div class="ti">${infoBody(defId, isHero, false)}</div>
+    <button class="mbtn btn3d gilt" data-m="resume">Got it</button>`);
+}
+const tip = document.createElement('div'); tip.id = 'tip'; document.body.appendChild(tip);
+let tipFor = '';
+function hideTip() { tip.classList.remove('on'); tipFor = ''; }
+document.addEventListener('pointerover', (ev) => {
+  if (ev.pointerType !== 'mouse' || drag) return;
+  const card = (ev.target as HTMLElement).closest('.card[data-v]') as HTMLElement | null;
+  if (!card || !game) { if (tipFor && !(ev.target as HTMLElement).closest('#tip')) hideTip(); return; }
+  const id = card.dataset.v!, isHero = id === 'hero', defId = isHero ? game.heroDef.id : id;
+  if (tipFor === id) return;
+  tipFor = id;
+  const name = isHero ? game.heroDef.name : TOWER_MAP[id].name;
+  tip.innerHTML = `<div class="tip-h"><b>${esc(name)}</b><span class="chip">${esc(infoFor(defId, isHero).tag)}</span></div><div class="ti">${infoBody(defId, isHero, true)}</div><div class="tip-f">Drag onto the map to build · click ${ICON.info} Info for upgrades</div>`;
+  const r = card.getBoundingClientRect(), sr = $('#side').getBoundingClientRect();
+  tip.classList.add('on');
+  const th = tip.offsetHeight;
+  tip.style.left = `${Math.max(8, sr.left - tip.offsetWidth - 10)}px`;
+  tip.style.top = `${Math.max(8, Math.min(window.innerHeight - th - 8, r.top + r.height / 2 - th / 2))}px`;
+});
+document.addEventListener('pointerdown', hideTip, true);
+
 // ================================================================ field HUD bar: placement / aiming / rally instructions
 const hudbar = $('#hudbar');
 let hudKey = '';
@@ -506,7 +558,8 @@ function renderHud() {
     const status = !ghost ? (drag ? 'Drop it on the map' : matchMedia('(pointer: coarse)').matches ? 'Tap the map to build' : 'Click the map to build') : ghost.valid ? (drag ? 'Release to build here' : 'Tap to build here') : ghost.reason ?? 'Can\'t build here';
     const bad = !!ghost && !ghost.valid;
     key = `p|${placing}|${cost}|${status}|${bad}`;
-    html = `<div class="hb ${bad ? 'bad' : ''}">${img(placing === 'hero' ? g.heroDef.id : placing, placing === 'hero', 34)}<div class="hb-t"><b>${esc(nm)} · ${cost === 0 ? 'FREE' : fmt(cost)}g</b><span>${esc(status)}${placing === 'barracks' && ghost?.valid ? ' · flag = where soldiers stand' : ''}</span></div><button class="hb-x btn3d redb" data-h="cancel">${ICON.close}<span>Cancel</span></button></div>`;
+    const inf = infoFor(placing === 'hero' ? g.heroDef.id : placing, placing === 'hero');
+    html = `<div class="hb ${bad ? 'bad' : ''}">${img(placing === 'hero' ? g.heroDef.id : placing, placing === 'hero', 34)}<div class="hb-t"><b>${esc(nm)} · ${cost === 0 ? 'FREE' : fmt(cost)}g</b><span class="hb-line">${esc(inf.line)}</span><span class="hb-st">${bad ? '✖ ' : '✔ '}${esc(status)}${placing === 'barracks' && ghost?.valid ? ' · flag = where soldiers stand' : ''}</span></div><div class="hb-btns"><button class="hb-x btn3d blueb" data-h="info">${ICON.info}<span>Info</span></button><button class="hb-x btn3d redb" data-h="cancel">${ICON.close}<span>Cancel</span></button></div></div>`;
   } else if (armedSpell) {
     const sp = g.spells.find((s) => s.id === armedSpell)!;
     key = `s|${armedSpell}`;
@@ -524,6 +577,7 @@ hudbar.addEventListener('pointerdown', (ev) => {
   const el = (ev.target as HTMLElement).closest('[data-h]') as HTMLElement | null;
   if (!el) return;
   ev.stopPropagation(); audio.play('click');
+  if (el.dataset.h === 'info' && placing && game) { towerInfoModal(placing === 'hero' ? game.heroDef.id : placing, placing === 'hero'); return; }
   cancelPlacing(); cancelSpells(); panelKey = '';
 });
 

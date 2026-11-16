@@ -411,3 +411,40 @@ body.dragging, body.dragging * { cursor: grabbing !important; }
   #field { flex: none; height: min(calc(66.7vw + 84px), 54vh); align-items: flex-start; padding-bottom: 78px; }
   #side { flex: 1; }
 }
+
+/* ---- tower info: role tags, hover tip, info sheet */
+.card .role { position: relative; font-family: 'Nunito', sans-serif; font-weight: 800; font-size: 9.5px; line-height: 1; letter-spacing: 0.04em; text-transform: uppercase; color: #ffe7a8; background: rgba(0,0,0,0.38); border-radius: 5px; padding: 2px 5px; margin: 1px 0 2px; white-space: nowrap; }
+.card.hero .role { color: #e6d8ff; }
+@media (orientation: portrait) { .card .role { font-size: 7.5px; padding: 1px 3px; letter-spacing: 0.02em; } }
+@media (max-height: 460px) and (orientation: landscape) { .card .role { font-size: 7.5px; padding: 1px 3px; } }
+#tip { position: fixed; z-index: 15; width: 280px; display: none; pointer-events: none; padding: 10px 12px; border-radius: 12px; color: var(--ink); background: var(--parchment);
+  box-shadow: inset 0 0 0 2px var(--goldline), inset 0 0 0 4px var(--wood3), 0 10px 24px rgba(0,0,0,0.55); }
+#tip.on { display: block; }
+.tip-h { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+.tip-h b { font-family: 'Cinzel', serif; font-weight: 900; font-size: 15px; }
+.tip-f { margin-top: 6px; font-size: 11px; font-weight: 800; color: var(--ink2); opacity: 0.85; } .tip-f .ico { width: 13px; height: 13px; }
+.ti { text-align: left; font-size: 13px; font-weight: 700; color: var(--ink); }
+.ti-line { font-size: 13.5px; line-height: 1.35; margin: 2px 0 6px; }
+.ti-dt { font-size: 12.5px; color: var(--ink2); margin-bottom: 6px; }
+.ti-dt .chip { background: #5a3418; }
+.ti-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 3px 12px; margin: 6px 0 8px; padding: 6px 8px; border-radius: 8px; background: rgba(255,255,255,0.3); box-shadow: inset 0 0 0 1px rgba(74,42,18,0.4); }
+.ti-row { display: flex; justify-content: space-between; gap: 6px; font-size: 12px; } .ti-row span { color: var(--ink2); }
+.ti-gw { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.ti-gw ul, .ti-ab { margin: 2px 0 4px; padding-left: 16px; font-size: 12px; line-height: 1.35; }
+.ti-h { font-family: 'Cinzel', serif; font-weight: 900; font-size: 12px; letter-spacing: 0.06em; margin-top: 6px; color: var(--wood3); }
+.ti-h.good { color: #2a6a10; } .ti-h.weak { color: #8a1610; }
+.ti-paths { display: grid; grid-template-columns: 1fr; gap: 8px; margin-top: 4px; }
+.ti-path { border-radius: 10px; overflow: hidden; background: rgba(255,255,255,0.28); box-shadow: inset 0 0 0 1.5px rgba(74,42,18,0.55); }
+.ti-path ol { margin: 4px 0 6px; padding-left: 24px; font-size: 12px; line-height: 1.3; }
+.ti-path li { margin: 2px 0; } .ti-path li b { font-family: 'Cinzel', serif; font-weight: 900; } .ti-path li span { display: block; font-weight: 700; color: var(--ink2); font-size: 11.5px; }
+@media (min-width: 720px) { .mbox:has(.ti-paths) { max-width: none; } .scroll:has(.ti-paths) { width: min(820px, 100%); } .ti-paths { grid-template-columns: repeat(3, 1fr); } }
+.ti-head { display: flex; align-items: center; gap: 10px; text-align: left; }
+.ti-head h2 { margin: 0; }
+.ti-cost { font-family: 'Lilita One', sans-serif; font-size: 16px; color: #5a3418; }
+.tp-role { display: flex; gap: 6px; align-items: flex-start; width: 100%; text-align: left; margin-top: 6px; padding: 6px 8px; border-radius: 9px; font-size: 11.5px; font-weight: 700; line-height: 1.3; color: var(--ink); background: rgba(255,255,255,0.35); box-shadow: inset 0 0 0 1.5px rgba(74,42,18,0.45); }
+.tp-role .ico { width: 16px; height: 16px; flex-shrink: 0; margin-top: 1px; }
+.hb-line { font-size: 11.5px !important; font-weight: 700 !important; opacity: 0.92; }
+.hb-st { font-size: 12.5px; font-weight: 900 !important; }
+.hb-btns { display: flex; flex-direction: column; gap: 5px; flex-shrink: 0; }
+.hb-btns .hb-x { height: 30px; font-size: 12px; justify-content: center; }
+@media (min-width: 700px) and (min-height: 461px) { .hb-btns { flex-direction: row; } .hb-btns .hb-x { height: 36px; } }
