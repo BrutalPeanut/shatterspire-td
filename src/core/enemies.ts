@@ -20,9 +20,9 @@ const list: EnemyDef[] = [
   { id: 'warbeast', name: 'War Mammoth', hp: 700, speed: 28, radius: 34, children: ['behemoth', 'behemoth', 'behemoth', 'behemoth'], color: '#a8433a', giant: true, immune: [], rank: 11, gold: 40 },
   { id: 'colossus', name: 'Iron Colossus', hp: 4000, speed: 20, radius: 42, children: ['warbeast', 'warbeast', 'warbeast', 'warbeast'], color: '#36523a', giant: true, immune: [], rank: 12, gold: 80 },
   // Bosses (HP bar at top of screen).
-  { id: 'golemking', name: 'The Golem King', hp: 320, speed: 30, radius: 38, children: ['wraith', 'wraith', 'wraith', 'wraith'], color: '#8c7a5e', giant: true, boss: true, immune: [], rank: 20, gold: 300, spawn: { every: 5, type: 'troll', count: 2 } },
-  { id: 'lich', name: 'Malachar the Lich', hp: 1600, speed: 26, radius: 36, children: ['golem', 'golem', 'golem', 'golem'], color: '#5b3d8a', giant: true, boss: true, immune: [], rank: 21, gold: 700, spawn: { every: 6, type: 'wraith', count: 2, mods: 's' } },
-  { id: 'dragon', name: 'Vyrmax the Elder Dragon', hp: 6400, speed: 22, radius: 46, children: ['behemoth', 'behemoth'], color: '#c23b2a', giant: true, boss: true, immune: [], rank: 22, gold: 2000, spawn: { every: 14, type: 'behemoth', count: 1 } },
+  { id: 'golemking', name: 'The Golem King', hp: 320, speed: 30, radius: 38, children: [], color: '#8c7a5e', giant: true, boss: true, immune: [], rank: 20, gold: 300, spawn: { every: 5, type: 'troll', count: 2 }, cracks: { at: [0.66, 0.33], type: 'wraith', count: 2, stagger: 1.5 } },
+  { id: 'lich', name: 'Malachar the Lich', hp: 1600, speed: 26, radius: 36, children: [], color: '#5b3d8a', giant: true, boss: true, immune: [], rank: 21, gold: 700, spawn: { every: 6, type: 'wraith', count: 2, mods: 's' }, cracks: { at: [0.66, 0.33], type: 'golem', count: 2, stagger: 1.5 } },
+  { id: 'dragon', name: 'Vyrmax the Elder Dragon', hp: 6400, speed: 22, radius: 46, children: [], color: '#c23b2a', giant: true, boss: true, immune: [], rank: 22, gold: 2000, spawn: { every: 9, type: 'hydra', count: 2 }, cracks: { at: [0.75, 0.5, 0.25], type: 'behemoth', count: 2, stagger: 1.5 } },
 ];
 
 export const ENEMIES: Record<string, EnemyDef> = Object.fromEntries(list.map((e) => [e.id, e]));
@@ -34,6 +34,7 @@ export function rbe(id: string): number {
   const d = ENEMIES[id];
   let v = d.hp;
   for (const c of d.children) v += rbe(c);
+  if (d.cracks) v += d.cracks.at.length * d.cracks.count * rbe(d.cracks.type);
   rbeCache[id] = v;
   return v;
 }

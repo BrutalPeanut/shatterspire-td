@@ -16,6 +16,10 @@ export interface Enemy {
   burnDps: number; burnT: number; burnAcc: number; burnBy: Tower | null;
   acidDps: number; acidT: number; acidAcc: number; acidBy: Tower | null;
   auraSlow: number; spawnT: number; dead: boolean; flash: number; wob: number; blockT: number;
+  /** Fraction of the road where this enemy came into being (0 = walked in at the entrance). */
+  born: number;
+  /** Crack points already passed (bosses). */
+  cracks: number;
 }
 
 export interface Soldier { tower: Tower; i: number; x: number; y: number; hx: number; hy: number; hp: number; maxHp: number; respawnT: number; cd: number; dead: boolean; anim: number; holding: number }
@@ -28,6 +32,8 @@ export interface Tower {
   cds: number[]; angle: number; pops: number; spent: number;
   /** Damage actually removed from enemies (layers + giant HP), and status/support contributions. */
   dmg: number; kills: number; assists: number;
+  /** Hits that bounced off immune enemies this battle, by enemy name (not saved). */
+  blocked: Record<string, number>; immuneT: number;
   abilities: { def: AbilityDef; left: number }[];
   bank: number; xp: number; level: number;
   buffs: Buffs; brewBuff: (Buffs & { t: number }) | null; brewT: number; anim: number;
@@ -56,7 +62,10 @@ export type GameEvent =
   | { type: 'levelUp'; level: number }
   | { type: 'ability'; id: string }
   | { type: 'place' } | { type: 'upgrade' } | { type: 'sell' }
-  | { type: 'bossDown'; name: string };
+  | { type: 'bossDown'; name: string }
+  | { type: 'shatter'; n: number; x: number; y: number }
+  | { type: 'immune'; x: number }
+  | { type: 'crack'; name: string; x: number; left: number };
 
 export interface Spell { id: string; name: string; icon: string; cd: number; left: number; targeted: boolean; desc: string }
 
@@ -185,7 +194,7 @@ export class Game {
     if (cost === 0 && !isHero) this.freeTower = false;
     const t: Tower = {
       uid: this.nextId++, defId: isHero ? this.heroId : defId, isHero, x, y, radius, tiers: [0, 0, 0],
-      targeting: 'first', stats: null as unknown as TowerStats, cds: [], angle: -Math.PI / 2, pops: 0, spent: cost, dmg: 0, kills: 0, assists: 0,
+      targeting: 'first', stats: null as unknown as TowerStats, cds: [], angle: -Math.PI / 2, pops: 0, spent: cost, dmg: 0, kills: 0, assists: 0, blocked: {}, immuneT: 0,
       abilities: [], bank: 0, xp: 0, level: 1, buffs: noBuffs(), brewBuff: null, brewT: 1, anim: 0, rally: null,
     };
     this.recompute(t);
@@ -330,7 +339,7 @@ export class Game {
   isBossWave(r: number) { return r === 20 || r === 30 || r === 40 || (r > 40 && r % 10 === 0); }
 
   /** Leaks during the current wave, by enemy type (for the defeat recap). */
-  waveLeaks: Record<string, { type: string; name: string; n: number; lives: number; shadow: boolean; regen: boolean; fort: boolean }> = {};
+  waveLeaks: Record<string, { type: string; name: string; n: number; lives: number; late: number; shadow: boolean; regen: boolean; fort: boolean }> = {};
   /** Lives lost per finished (or failed) wave. */
   history: { round: number; lost: number }[] = [];
   /** Snapshot taken just before the current wave started, so a lost wave can be retried. */
@@ -371,6 +380,7 @@ export class Game {
       slowF: 0, slowT: 0, slowG: 0, stunT: 0, frozen: false,
       burnDps: 0, burnT: 0, burnAcc: 0, burnBy: null, acidDps: 0, acidT: 0, acidAcc: 0, acidBy: null,
       auraSlow: 0, spawnT: def.spawn?.every ?? 0, dead: false, flash: 0, wob: this.rnd() * 6, blockT: 0,
+      born: d > 0 ? d / this.paths[path].len : 0, cracks: 0,
     };
     if (parent) {
       e.burnDps = parent.burnDps; e.burnT = parent.burnT; e.burnBy = parent.burnBy;
@@ -407,11 +417,18 @@ export class Game {
   }
   shatterBonus = 0;
   lastHeal = 0;
+  /** Set when a boss reaches the Spire: how much of its shell was left (for the defeat recap). */
+  bossLeak: { name: string; hpFrac: number } | null = null;
 
   /** Apply an attack hit to an enemy. Returns false if the enemy is immune (blocks the projectile). */
   hit(e: Enemy, a: Attack, t: Tower, dmgOverride?: number): boolean {
     if (e.dead) return true;
-    if (!this.canHurt(e, a.dtype, t)) { this.fxRing(e.x, e.y, 6, '#ffffff', 0.15); return false; }
+    if (!this.canHurt(e, a.dtype, t)) {
+      this.fxRing(e.x, e.y, 6, '#ffffff', 0.15);
+      t.blocked[e.def.name] = (t.blocked[e.def.name] ?? 0) + 1;
+      if (this.time - t.immuneT > 1.4) { t.immuneT = this.time; this.text(e.x, e.y - e.def.radius - 6, 'IMMUNE', '#cfd6de'); this.events.push({ type: 'immune', x: e.x }); }
+      return false;
+    }
     const giant = !!e.def.giant;
     let dmg = (dmgOverride ?? a.damage) + (dmgOverride === undefined ? t.buffs.damage : 0);
     if (giant && a.giantBonus) dmg += a.giantBonus;
@@ -433,26 +450,60 @@ export class Game {
     if (a.knock && !giant) e.d = Math.max(0, e.d - a.knock);
     if (a.strip) { e.regen = false; if (e.fortified) { e.fortified = false; e.hp = Math.min(e.hp, e.maxHp / 2); } }
     if (a.reveal) e.shadow = false;
+    const before = this.popCount, ex = e.x, ey = e.y;
     this.damage(e, dmg, t);
+    const n = this.popCount - before;
+    if (n >= 6 && this.time - this.shatterT > 0.2) { this.shatterT = this.time; this.events.push({ type: 'shatter', n, x: ex, y: ey }); if (n >= 10) this.text(ex, ey - 26, `SHATTER ×${n}`, '#9fe8ff'); }
     return true;
   }
+  /** Layers broken so far this battle (used to size "shatter" moments). */
+  popCount = 0; private shatterT = 0;
+  private lastKids: Enemy[] = [];
 
   popGold() { return this.freeplay ? 0.3 : this.round <= 30 ? 1.15 : 0.9; }
+
+  /** Share of overkill damage that carries through a split (1 = all of it, divided between the children). */
+  static SHATTER_CARRY = 1;
+
+  /** Boss crack points: stagger, shed minions behind it, tell the UI. */
+  private checkCracks(e: Enemy) {
+    const c = e.def.cracks!;
+    while (e.cracks < c.at.length && e.hp / e.maxHp <= c.at[e.cracks]) {
+      e.cracks++;
+      e.stunT = Math.max(e.stunT, c.stagger); e.frozen = false;
+      for (let i = 0; i < c.count; i++) this.spawn(c.type, c.mods ?? '', e.path, Math.max(1, e.d - 16 - i * 16));
+      this.fx.push({ kind: 'ring', x: e.x, y: e.y, r: e.def.radius * 2.6, t: 0, max: 0.7, color: '#fff2b0' });
+      this.burst(e.x, e.y, e.def.color, 30, 4);
+      this.text(e.x, e.y - e.def.radius - 14, 'CRACKED!', '#fff2b0');
+      this.events.push({ type: 'crack', name: e.def.name, x: e.x, left: c.at.length - e.cracks });
+    }
+  }
 
   damage(e: Enemy, amount: number, by: Tower | null) {
     let cur: Enemy | null = e;
     let rem = amount;
     while (cur && rem > 0 && !cur.dead) {
       cur.flash = 0.08;
-      if (cur.hp > rem) { cur.hp -= rem; if (by) by.dmg += rem; return; }
+      if (cur.hp > rem) { cur.hp -= rem; if (by) by.dmg += rem; if (cur.def.cracks) this.checkCracks(cur); return; }
       rem -= cur.hp;
       if (by) by.dmg += cur.hp;
-      cur = this.popLayer(cur, by);
+      const next: Enemy | null = this.popLayer(cur, by);
+      if (this.lastKids.length > 1) {
+        // Shatter-through: damage left over after breaking a layer is shared between everything that spills out,
+        // so one heavy hit cracks a big enemy open along every branch instead of only the first.
+        const kids = this.lastKids.slice();
+        const share = (rem * Game.SHATTER_CARRY) / kids.length;
+        if (share >= 0.05) for (const k of kids) this.damage(k, share, by);
+        return;
+      }
+      cur = next;
     }
   }
 
   private popLayer(e: Enemy, by: Tower | null): Enemy | null {
     const def = e.def;
+    this.popCount++;
+    this.lastKids.length = 0;
     let g = def.gold * this.popGold();
     if (by) { by.pops++; if (def.children.length === 0) by.kills++; g += by.stats.goldPerPop; if (e.type === 'iron') g += by.stats.ironGold; }
     this.gold += g;
@@ -475,6 +526,7 @@ export class Game {
     kids.forEach((k, i) => {
       const c = this.spawn(k, mods, e.path, Math.max(0, e.d - i * (def.giant ? 14 : 7)), e);
       c.stunT = 0;
+      this.lastKids.push(c);
       if (!first) first = c;
     });
     return first;
@@ -604,12 +656,13 @@ export class Game {
       if (e.d >= p.len) {
         e.dead = true;
         const lost = e.def.boss ? 99999 : Math.ceil(rbe(e.type) - (e.maxHp - e.hp));
+        if (e.def.boss) this.bossLeak = { name: e.def.name, hpFrac: e.hp / e.maxHp };
         this.lives -= lost;
         this.stats.leaked += lost;
         this.stats.leakedBy[e.def.name] = (this.stats.leakedBy[e.def.name] ?? 0) + lost;
         this.events.push({ type: 'leak', lives: lost, name: e.def.name });
-        const wl = (this.waveLeaks[e.type] ??= { type: e.type, name: e.def.name, n: 0, lives: 0, shadow: false, regen: false, fort: false });
-        wl.n++; wl.lives += lost; wl.shadow ||= e.shadow; wl.regen ||= e.regen; wl.fort ||= e.fortified;
+        const wl = (this.waveLeaks[e.type] ??= { type: e.type, name: e.def.name, n: 0, lives: 0, late: 0, shadow: false, regen: false, fort: false });
+        wl.n++; wl.lives += lost; if (e.born > 0.55) wl.late += lost; wl.shadow ||= e.shadow; wl.regen ||= e.regen; wl.fort ||= e.fortified;
         continue;
       }
       e.angle = pointAt(p, e.d, e);

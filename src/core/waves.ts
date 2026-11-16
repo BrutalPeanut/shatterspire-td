@@ -6,8 +6,8 @@ const g = (type: string, count: number, spacing: number, delay = 0, mods = ''): 
 
 // 40 handcrafted waves. Bosses on 20, 30, 40.
 export const WAVES: WaveGroup[][] = [
-  /* 1 */[g('imp', 20, 0.8)],
-  /* 2 */[g('imp', 32, 0.55)],
+  /* 1 */[g('imp', 20, 0.6)],
+  /* 2 */[g('imp', 32, 0.45)],
   /* 3 */[g('imp', 20, 0.6), g('goblin', 6, 1.0, 6)],
   /* 4 */[g('imp', 25, 0.45), g('goblin', 15, 0.8, 4)],
   /* 5 */[g('imp', 10, 0.5), g('goblin', 26, 0.45, 3)],
@@ -36,16 +36,16 @@ export const WAVES: WaveGroup[][] = [
   /* 28 */[g('golem', 12, 1.0), g('hydra', 10, 0.8, 5, 'r')], // same enemies, less burst (was 0.6s / 0.5s)
   /* 29 */[g('wraith', 20, 0.3), g('behemoth', 2, 3, 6)],
   /* 30 */[g('golem', 10, 0.8), g('lich', 1, 1, 6)],
-  /* 31 */[g('hydra', 30, 0.3), g('behemoth', 3, 2.5, 6)],
-  /* 32 */[g('golem', 25, 0.4, 0, 'r')],
-  /* 33 */[g('behemoth', 5, 2)],
-  /* 34 */[g('iron', 30, 0.3), g('golem', 20, 0.5, 6, 's')],
-  /* 35 */[g('golem', 20, 0.4), g('warbeast', 1, 1, 10)],
-  /* 36 */[g('golem', 15, 0.45, 0, 'f'), g('behemoth', 4, 2, 6)],
-  /* 37 */[g('hydra', 30, 0.25), g('behemoth', 2, 3, 4), g('warbeast', 1, 1, 12)],
-  /* 38 */[g('golem', 30, 0.3, 0, 'r'), g('behemoth', 3, 2, 10, 'f')],
-  /* 39 */[g('golem', 25, 0.3, 0, 's'), g('behemoth', 5, 1.8, 6), g('warbeast', 1, 1, 16)],
-  /* 40 */[g('behemoth', 3, 2.5), g('warbeast', 1, 1, 8), g('dragon', 1, 1, 14)],
+  /* 31 */[g('hydra', 34, 0.3), g('behemoth', 4, 2.5, 6)],
+  /* 32 */[g('golem', 30, 0.4, 0, 'r')],
+  /* 33 */[g('behemoth', 6, 2)],
+  /* 34 */[g('iron', 34, 0.3), g('golem', 24, 0.5, 6, 's')],
+  /* 35 */[g('golem', 24, 0.4), g('warbeast', 1, 1, 10)],
+  /* 36 */[g('golem', 18, 0.45, 0, 'f'), g('behemoth', 5, 2, 6)],
+  /* 37 */[g('hydra', 36, 0.25), g('behemoth', 3, 3, 4), g('warbeast', 1, 1, 12)],
+  /* 38 */[g('golem', 34, 0.3, 0, 'r'), g('behemoth', 4, 2, 10, 'f')],
+  /* 39 */[g('golem', 28, 0.3, 0, 's'), g('behemoth', 6, 1.8, 6), g('warbeast', 1, 1, 16)],
+  /* 40 */[g('behemoth', 4, 2.5), g('warbeast', 1, 1, 8), g('dragon', 1, 1, 14)],
 ];
 
 export const FINAL_WAVE = WAVES.length;

@@ -156,6 +156,8 @@ export interface EnemyDef {
   rank: number;
   gold: number; // gold awarded for destroying this layer
   spawn?: { every: number; type: string; count: number; mods?: string };
+  /** Crack points: at these fractions of its shell a boss staggers and sheds minions (in order, high to low). */
+  cracks?: { at: number[]; type: string; count: number; mods?: string; stagger: number };
   regenParent?: string;
 }
 
