@@ -70,3 +70,27 @@ export function baseStats(defId: string, isHero: boolean) {
   if (a.slow) rows.push(['Slow', `${Math.round(a.slow.f * 100)}% for ${a.slow.dur}s`]);
   return { dtype, rows };
 }
+
+// ---------------------------------------------------------------- tower groups (how to use them)
+export interface TowerGroup { id: string; name: string; short: string; how: string; color: string; towers: string[] }
+export const GROUPS: TowerGroup[] = [
+  { id: 'hero', name: 'Hero', short: 'Levels up', color: '#7a4fd6', towers: ['hero'],
+    how: 'One per battle. Gains a level every wave and unlocks two abilities. Put it where the fighting is heaviest.' },
+  { id: 'crowd', name: 'Crowd Damage', short: 'Hit groups', color: '#d8572f', towers: ['knight', 'mage', 'cannon'],
+    how: 'Hit many enemies at once. Your answer to swarms. Put them on bends and where the road doubles back, so they reach more of it.' },
+  { id: 'single', name: 'Single Target', short: 'Big enemies', color: '#2f7fd8', towers: ['archer', 'ballista'],
+    how: 'Pour damage into one enemy at a time. Your answer to giants and bosses. Set targeting to Strong when giants show up.' },
+  { id: 'control', name: 'Control', short: 'Slow & hold', color: '#1f9a8a', towers: ['barracks', 'druid'],
+    how: 'Slow or hold enemies so your damage towers get more hits. Put them inside your damage towers\' range, never on their own.' },
+  { id: 'support', name: 'Support & Gold', short: 'Buff & earn', color: '#c8901a', towers: ['alchemist', 'bard', 'mine'],
+    how: 'Make nearby towers stronger, or earn gold. They barely attack, so build them once your defense is holding and place buffers next to your best towers.' },
+];
+export function groupOf(id: string): TowerGroup { return GROUPS.find((g) => g.towers.includes(id)) ?? GROUPS[0]; }
+/** A good defense, in order. Shown in the group guide. */
+export const BUILD_ORDER = [
+  'Start with Crowd Damage on a bend: the early waves are swarms.',
+  'Add Single Target before the first big enemies (Golems, then Giants from wave 26).',
+  'Add Control where your damage overlaps, so enemies stay in range longer.',
+  'Once nothing is leaking, add Support next to your best towers, or a Gold Mine early on for a long game.',
+  'Check the Next Wave box: it names the counter you need (Ironclads, Shadowed, Giants…).',
+];

@@ -18,7 +18,7 @@ import { drawEnemyModel } from './render/enemyArt';
 import { ENEMIES } from './core/enemies';
 import { audio } from './audio/audio';
 import { ICON } from './ui/icons';
-import { DTYPE, baseStats, infoFor } from './ui/towerInfo';
+import { BUILD_ORDER, DTYPE, GROUPS, baseStats, groupOf, infoFor } from './ui/towerInfo';
 import { clearRun, heroUnlocked, loadProfile, loadRun, mapUnlocked, medalCount, perkPointsLeft, saveProfile, saveRun, towerUnlocked, type Profile } from './save';
 
 const $ = <T extends HTMLElement = HTMLElement>(sel: string) => document.querySelector(sel) as T;
@@ -356,6 +356,7 @@ side.addEventListener('click', (ev) => {
   } else if (a === 'withdraw' && selected) { game.withdraw(selected); audio.play('coin'); panelKey = ''; }
   else if (a === 'rally' && selected) { rallyEdit = rallyEdit ? null : selected; audio.play('click'); panelKey = ''; }
   else if (a === 'powers') powersMenu();
+  else if (a === 'groups') groupGuide(v || undefined);
   else if (a === 'waveinfo') waveDetails();
   else if (a === 'info' && selected) towerInfoModal(selected.defId, selected.isHero);
 });
@@ -419,19 +420,31 @@ function towerStatLine(t: Tower) {
 // Armory: built once per session, then updated in place so cards never move.
 function shopPanel() {
   const g = game!;
-  let h = `<div class="side-title">Armory</div><div class="shop">`;
   const hd = g.heroDef;
-  h += `<button class="card hero" data-a="buy" data-v="hero" data-cost="${g.towerCost('hero')}">${img(hd.id, true)}<div class="nm">${esc(hd.name)}</div><div class="role">Hero</div><div class="cost">${ICON.coinSmall}<span>${fmt(g.towerCost('hero'))}</span></div></button>`;
-  for (const d of TOWERS) {
-    const un = towerUnlocked(profile, d.id);
-    const cost = g.towerCost(d.id);
-    h += un
-      ? `<button class="card" data-a="buy" data-v="${d.id}" data-cost="${cost}">${img(d.id)}<div class="nm">${esc(d.name)}</div><div class="role">${esc(infoFor(d.id, false).tag)}</div><div class="cost">${ICON.coinSmall}<span>${fmt(cost)}</span></div></button>`
-      : `<button class="card locked" data-a="buy" data-v="${d.id}" data-lock="${esc(d.name)} unlocks after ${d.unlockRounds} rounds played (${d.unlockRounds - profile.totalRounds} to go)">${img(d.id)}<div class="nm">${esc(d.name)}</div><div class="role">${esc(infoFor(d.id, false).tag)}</div><div class="cost">${ICON.lock.replace('class="ico"', 'class="ico sm"')} ${d.unlockRounds - profile.totalRounds}</div></button>`;
+  const card = (id: string) => {
+    if (id === 'hero') return `<button class="card hero" data-a="buy" data-v="hero" data-cost="${g.towerCost('hero')}">${img(hd.id, true)}<div class="nm">${esc(hd.name)}</div><div class="role">Hero</div><div class="cost">${ICON.coinSmall}<span>${fmt(g.towerCost('hero'))}</span></div></button>`;
+    const d = TOWER_MAP[id];
+    const cost = g.towerCost(id);
+    return towerUnlocked(profile, id)
+      ? `<button class="card" data-a="buy" data-v="${id}" data-cost="${cost}">${img(id)}<div class="nm">${esc(d.name)}</div><div class="role">${esc(infoFor(id, false).tag)}</div><div class="cost">${ICON.coinSmall}<span>${fmt(cost)}</span></div></button>`
+      : `<button class="card locked" data-a="buy" data-v="${id}" data-lock="${esc(d.name)} unlocks after ${d.unlockRounds} rounds played (${d.unlockRounds - profile.totalRounds} to go)">${img(id)}<div class="nm">${esc(d.name)}</div><div class="role">${esc(infoFor(id, false).tag)}</div><div class="cost">${ICON.lock.replace('class="ico"', 'class="ico sm"')} ${d.unlockRounds - profile.totalRounds}</div></button>`;
+  };
+  // Towers are grouped by job; each group box spans as many grid columns as it has cards.
+  let h = `<div class="side-title">Armory</div><div class="shop">`;
+  for (const gr of GROUPS) {
+    h += `<div class="grp ${gr.towers.length === 1 ? "one" : ""}" style="--gc:${gr.color};--n:${gr.towers.length}"><button class="grp-h" data-a="groups" data-v="${gr.id}" title="${esc(gr.how)}"><b>${esc(gr.name)}</b><span>${esc(gr.short)}</span></button><div class="grp-c">${gr.towers.map(card).join('')}</div></div>`;
   }
-  h += `</div><div class="row"><button class="btn btn3d blueb" data-a="powers">${ICON.sparkle} Powers <span id="pwN"></span></button></div>
+  h += `</div><div class="row"><button class="btn btn3d woodb" data-a="groups">${ICON.book} Tower guide</button><button class="btn btn3d blueb" data-a="powers">${ICON.sparkle} Powers <span id="pwN"></span></button></div>
     <div class="hint" id="shopHint"></div>`;
   return h;
+}
+/** Explains the tower groups and a sensible build order. */
+function groupGuide(focus?: string) {
+  const rows = GROUPS.map((gr) => `<div class="gg ${gr.id === focus ? 'focus' : ''}" style="--gc:${gr.color}"><div class="gg-h"><b>${esc(gr.name)}</b><span>${gr.towers.map((t) => esc(t === 'hero' ? 'your hero' : TOWER_MAP[t].name)).join(' · ')}</span></div><div class="gg-t">${esc(gr.how)}</div></div>`).join('');
+  modal(`<h2>Tower Guide</h2><div class="hint">Every tower has a job. A strong defense mixes groups.</div>${rows}
+    <div class="ti-h">A good build order</div><ol class="rc-tips">${BUILD_ORDER.map((x) => `<li>${esc(x)}</li>`).join('')}</ol>
+    <button class="mbtn btn3d gilt" data-m="resume">Got it</button>`);
+  if (focus) modalEl.querySelector('.gg.focus')?.scrollIntoView({ block: 'center' });
 }
 function updateShop() {
   const g = game!;
@@ -504,7 +517,8 @@ function infoBody(defId: string, isHero: boolean, compact: boolean) {
   const inf = infoFor(defId, isHero), st = baseStats(defId, isHero), dt = DTYPE[st.dtype];
   const rows = st.rows.map(([k, v]) => `<div class="ti-row"><span>${esc(k)}</span><b>${esc(v)}</b></div>`).join('');
   const good = inf.good.map((x) => `<li>${esc(x)}</li>`).join(''), weak = inf.weak.map((x) => `<li>${esc(x)}</li>`).join('');
-  let h = `<div class="ti-line">${esc(inf.line)}</div>
+  const gr = groupOf(isHero ? 'hero' : defId);
+  let h = `<div class="ti-grp" style="--gc:${gr.color}"><b>${esc(gr.name)}</b> ${esc(gr.how)}</div><div class="ti-line">${esc(inf.line)}</div>
     <div class="ti-dt"><span class="chip">${esc(dt.name.toUpperCase())}</span> ${esc(dt.blocked)}</div>
     ${compact ? '' : `<div class="ti-stats">${rows}</div>`}
     <div class="ti-gw"><div><div class="ti-h good">Good against</div><ul>${good}</ul></div><div><div class="ti-h weak">Weak against</div><ul>${weak}</ul></div></div>`;
@@ -897,6 +911,7 @@ function showMenu(screen: 'main' | 'play' | 'tree' | 'settings' | 'how') {
       <p>💥 <b>Enemies come in layers.</b> Hit an Ogre and it becomes a Troll, then an Orc, then a Goblin, then an Imp. Big enemies burst into several smaller ones.</p>
       <p>🛡 <b>Counters matter.</b> The Next Wave box warns you: SHARP-PROOF Ironclads shrug off arrows and swords, BLAST-PROOF Glooms ignore explosions, COLD-PROOF Frostlings ignore frost, MAGIC-PROOF Hexlings ignore magic, and SHADOWED enemies are invisible without True Sight.</p>
       <p>🐘 <b>Giants</b> (from wave 26) have huge health and cost hundreds of lives if they leak. Build heavy single-target damage before they arrive.</p>
+      <p>🧭 <b>Tower groups:</b> ${GROUPS.filter((g) => g.id !== 'hero').map((g) => `<b>${esc(g.name)}</b> (${g.towers.map((t) => esc(TOWER_MAP[t].name)).join(', ')}): ${esc(g.how)}`).join(' ')}</p>
       <p>⬆ <b>Upgrades:</b> every tower has 3 paths of 5 tiers. You can upgrade 2 paths, and only one of them past tier 2 (e.g. 5-2-0).</p>
       <p>🚩 <b>Barracks</b> soldiers hold enemies in place. The flag shows where they stand; use <i>Move Rally Point</i> to post them anywhere on the road nearby.</p>
       <p>⏱ <b>Spells and abilities recharge only while a wave is running</b>, in game time, so 2×/3× speed recharges them faster. Between waves the timer waits (⏸). Reinforce Walls can be cast any time but can't raise lives above your starting total.</p>

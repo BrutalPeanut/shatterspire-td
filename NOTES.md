@@ -30,6 +30,17 @@
 - **Retry wave:** `Game.waveStartSave` (snapshot at `startWave`) is restored. Powers from a defeat are granted only when leaving the run (Restart/Menu), so retries can't farm them.
 - Live leak ribbons are grouped every 0.7s ("Leaked: 3 Ogres (−15 lives)"), and the Lives pill shakes.
 
+### Tower groups (2026-11-15, night)
+- `GROUPS` in `src/ui/towerInfo.ts`:
+  - Hero
+  - Crowd Damage: Knight, Fire Mage, Cannon
+  - Single Target: Archer, Ballista
+  - Control: Barracks, Frost Druid
+  - Support & Gold: Alchemist, Bard, Gold Mine
+- Each group has a one-line "how to use". There's also `BUILD_ORDER`.
+- The Armory is a grid with `grid-auto-flow: dense`. Each colored group box spans as many columns as it has towers (6 columns on portrait, 4 on landscape phones, 3 elsewhere).
+- Group headers and the "Tower guide" button open the guide modal. The info sheet and hover tip show the group too, and How to Play lists the groups.
+
 ### Tests
 - `npx tsx test/unit.ts`: timing, reinforce cap, placement reasons, hero unlock levels, save compatibility, deploy preview, wave preview, powers (155 checks).
 - `python3 test/ui_test.py` against `npx vite preview --port 4173` runs real Chrome:

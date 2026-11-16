@@ -97,6 +97,13 @@ with sync_playwright() as p:
     pg.click('.tp-role'); pg.wait_for_timeout(80)
     check('Archer' in pg.inner_text('#modal') and 'Eagle Eye' in pg.inner_text('#modal'), 'tower panel opens the info sheet')
     pg.click('[data-m="resume"]'); pg.keyboard.press('Escape')
+    # 8c. tower groups
+    pg.wait_for_timeout(120)
+    groups = pg.evaluate("[...document.querySelectorAll('.grp .grp-h b')].map(e => e.textContent)")
+    check(len(groups) == 5 and pg.locator('.grp .card').count() == 11, f'Armory grouped by job ({groups})')
+    pg.click('.grp-h[data-v="control"]'); pg.wait_for_timeout(80)
+    check('Tower Guide' in pg.inner_text('#modal') and pg.locator('.gg.focus').count() == 1, 'group header opens the Tower Guide focused on that group')
+    pg.click('[data-m="resume"]')
     # 9. pause button freezes the sim
     pg.click('#startBtn'); pg.wait_for_timeout(300)
     pg.click('#pauseBtn'); t0 = pg.evaluate('__ss.game.time'); pg.wait_for_timeout(500)
