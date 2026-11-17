@@ -29,6 +29,12 @@ function safeGet(k: string): string | null { try { return localStorage.getItem(k
 function safeSet(k: string, v: string) { try { localStorage.setItem(k, v); } catch { /* storage unavailable */ } }
 function safeDel(k: string) { try { localStorage.removeItem(k); } catch { /* ignore */ } }
 
+/** ?fresh erases the saved profile so the next load is a true first run, then cleans the URL so a refresh does not erase again. */
+if (typeof location !== 'undefined' && /[?&]fresh\b/.test(location.search)) {
+  safeDel(KEY); safeDel(RUN);
+  try { const u = new URL(location.href); u.searchParams.delete('fresh'); history.replaceState(null, '', u.pathname + u.search + u.hash); } catch { /* ignore */ }
+}
+
 export function loadProfile(): Profile {
   const def: Profile = { v: 1, totalRounds: 0, medals: {}, perks: [], powers: { chest: 1, draught: 1 }, settings: { sfx: true, music: true, autoStart: false, sfxVol: 0.8, musicVol: 0.7, quality: 'high', advisor: true }, lastHero: 'aldric', tutorialDone: false,
     shards: 0, vaultLevel: 0, vaultSince: Date.now() - 50 * 60_000 }; // new and returning players find 50 shards waiting
