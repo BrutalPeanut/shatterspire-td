@@ -32,6 +32,12 @@ with sync_playwright() as p:
     ctx = b.new_context(viewport={'width': 1366, 'height': 768}); pg = ctx.new_page(); errs = []
     pg.on('pageerror', lambda e: errs.append(str(e)))
     pg.goto(BASE + '&t=d1'); pg.wait_for_timeout(700)
+    pg.evaluate("localStorage.setItem('shatterspire.profile.v1', JSON.stringify({v:1,totalRounds:99,perks:['x']}))")
+    pg.goto(BASE.split('?')[0] + '?fresh&t=fr'); pg.wait_for_timeout(500)
+    check(pg.evaluate("localStorage.getItem('shatterspire.profile.v1')") is None and 'fresh' not in pg.evaluate('location.search'), '?fresh erases the profile and cleans the URL')
+    pg.reload(); pg.wait_for_timeout(400)
+    check(pg.evaluate("__ss ? 1 : 0") == 1, 'reload after ?fresh still runs')
+    pg.goto(BASE + '&t=d1b'); pg.wait_for_timeout(600)
     pg.click('[data-g="settings"]'); pg.click('[data-g="credits"]'); pg.wait_for_timeout(80)
     check('SIL Open Font License' in pg.inner_text('#modal') and 'original game' in pg.inner_text('#modal'), 'Settings > Credits lists the font licences')
     pg.click('[data-m="resume"]'); pg.click('[data-g="main"]'); pg.wait_for_timeout(80)

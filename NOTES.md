@@ -127,6 +127,7 @@ Owner wants an epic, grounded high-fantasy look for adults 18-45 (see the brief 
 - **Assets:** original code-drawn art, or CC0 / OFL / MIT only, each recorded in CREDITS.md with source and licence. No ripped assets, no GPL / non-commercial / share-alike, no AI art prompted with artist or franchise names.
 - **Done in this PR:** Archer path "Hawkeye" (a comic-book archer's name) renamed "Sharpshooter"; other games' names removed from README, comments and notes; CREDITS.md added.
 - **Title check (web search only, 2026-11-16):** no game called "Shatterspire" turned up. Nearby names exist: "Shatterhold" (Steam) and "Shadespire" (a Games Workshop product line). Before a paid store launch do a real USPTO/EUIPO search (classes 9 and 41) or pay a lawyer for one.
+- **Test links:** `?unlockall` unlocks everything; `?fresh` erases the saved profile for a true first-run test (it cleans itself out of the URL so a refresh does not erase again). They combine.
 - **Still to do from the 18-45 restyle brief:** muted palette, serif UI type (drop Lilita One), lean realistic proportions, original orchestral ambience, menus restyled; fix boss banners over the map, portrait ability-strip overflow, unreadable medallion labels, locked-vs-unaffordable tile states, "Layers" jargon, and the difficulty cliff at boss waves (bot: Medium flawless, Hard loses 66-142 lives in wave 30 alone).
 
 ## Map-first battle screen (2026-11-16, PR #11)
