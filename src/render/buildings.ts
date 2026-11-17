@@ -1,4 +1,4 @@
-// Tower buildings (Kingdom Rush style): each tower is a structure with its unit(s)
+// Tower buildings: each tower is a structure with its unit(s)
 // standing on or around it. Each building has a back layer, a figure anchor and a
 // front layer so units sit *inside* the architecture instead of on a pedestal.
 type C = CanvasRenderingContext2D;

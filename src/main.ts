@@ -299,7 +299,7 @@ function refreshTop() {
   const sb = $('#startBtn');
   const building = game.state === 'build';
   const next = game.round + 1;
-  // one round button, Bloons-style: Play between waves, a dimmed "fighting" state during one
+  // one round button: Play between waves, a dimmed "fighting" state during one
   if (building && autoT !== null) sb.innerHTML = `${ICON.play}<span class="cl">in ${Math.ceil(autoT)}s</span>`;
   else if (building) sb.innerHTML = `${ICON.play}<span class="cl">${game.round === 0 ? 'Start' : `Wave ${next}`}</span>`;
   else sb.innerHTML = `${ICON.swords}<span class="cl">Wave ${game.round}</span>`;
@@ -424,7 +424,7 @@ function renderSide() {
     panelKey = key;
     tpanel.innerHTML = t ? towerPanel(t) : '';
     tpanel.classList.toggle('on', !!t && !rallyEdit); // while moving a rally point the panel steps aside so the whole road is reachable
-    // like Bloons: the panel opens on the side away from the tower so it never hides it
+    // the panel opens on the side away from the tower so it never hides it
     if (t) tpanel.classList.toggle('L', t.x > WORLD_W / 2);
   }
   document.querySelectorAll<HTMLElement>('#tiles [data-cost], #tpanel [data-cost]').forEach((el) => el.classList.toggle('poor', g.gold < Number(el.dataset.cost)));
@@ -454,12 +454,20 @@ function shopPanel() {
       ? `<button class="tile" style="--gc:${gc}" data-a="buy" data-v="${id}" data-cost="${cost}" aria-label="${esc(d.name)}">${img(id)}<span class="tc">${ICON.coinSmall}<span>${fmt(cost)}</span></span></button>`
       : `<button class="tile locked" style="--gc:${gc}" data-a="buy" data-v="${id}" aria-label="${esc(d.name)} (locked)" data-lock="${esc(d.name)} unlocks after ${d.unlockRounds} rounds played (${d.unlockRounds - profile.totalRounds} to go)">${img(id)}<span class="tc">${ICON.lock.replace('class="ico"', 'class="ico sm"')}<span>${d.unlockRounds - profile.totalRounds}</span></span></button>`;
   };
-  // tile colour = the tower's job (Crowd, Single target, Control, Support), as in Bloons' tower categories
-  // the cheap starter (Archer) sits in the first row beside the hero, like Bloons' Dart Monkey
+  // tile colour = the tower's job (Crowd, Single target, Control, Support)
+  // the cheap starter (Archer) sits in the first row beside the hero
   const order = ['hero', 'single', 'crowd', 'control', 'support'];
   return [...GROUPS].sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id)).flatMap((gr) => gr.towers).map(tile).join('');
 }
 /** Explains the tower groups and a sensible build order. */
+function creditsModal() {
+  const fonts: [string, string][] = [['Cinzel', '© 2020 The Cinzel Project Authors'], ['Cinzel Decorative', '© 2012 Natanael Gama'], ['Lilita One', '© 2011 Juan Montoreano'], ['Nunito', '© 2014 The Nunito Project Authors']];
+  modal(`<h2>Credits &amp; licences</h2>
+    <div class="hint">Shatterspire is an original game. Its art is drawn in code and its sound is synthesised in the game. It is not affiliated with, or based on, any other game, book or film.</div>
+    <div class="ti-h">Fonts (SIL Open Font License 1.1)</div><ul class="rc-tips">${fonts.map(([n, c]) => `<li><b>${n}</b> ${c}</li>`).join('')}</ul>
+    <div class="hint">Licence text: openfontlicense.org</div>
+    <button class="mbtn btn3d gilt" data-m="resume">Close</button>`);
+}
 function groupGuide(focus?: string) {
   const rows = GROUPS.map((gr) => `<div class="gg ${gr.id === focus ? 'focus' : ''}" style="--gc:${gr.color}"><div class="gg-h"><b>${esc(gr.name)}</b><span>${gr.towers.map((t) => esc(t === 'hero' ? 'your hero' : TOWER_MAP[t].name)).join(' · ')}</span></div><div class="gg-t">${esc(gr.how)}</div></div>`).join('');
   modal(`<h2>Tower Guide</h2><div class="hint">Every tower has a job. A strong defense mixes groups.</div>${rows}
@@ -981,6 +989,7 @@ function showMenu(screen: 'main' | 'play' | 'tree' | 'settings' | 'how' | 'shop'
       <button class="toggle btn3d woodb" data-g="quality"><span>Graphics</span><span>${st.quality === 'high' ? 'HIGH' : 'LOW (battery saver)'}</span></button>
       ${document.fullscreenEnabled ? `<button class="toggle btn3d woodb" data-g="full"><span>Fullscreen</span><span>${document.fullscreenElement ? 'ON' : 'OFF'}</span></button>` : ''}
       <button class="toggle btn3d woodb" data-g="tutorial"><span>Replay tutorial</span><span>${profile.tutorialDone ? 'NEXT GAME' : 'ON'}</span></button>
+      <button class="toggle btn3d woodb" data-g="credits"><span>Credits &amp; licences</span><span>›</span></button>
       <button class="mbtn btn3d redb" data-g="wipe">Reset all progress</button>
       <button class="mbtn btn3d woodb" data-g="main">Back</button></div>`;
   } else {
@@ -1088,6 +1097,7 @@ menu.addEventListener('click', (ev) => {
     case 'quality': profile.settings.quality = profile.settings.quality === 'high' ? 'low' : 'high'; saveProfile(profile); showMenu('settings'); break;
     case 'full': toggleFullscreen(); setTimeout(() => showMenu('settings'), 200); break;
     case 'tutorial': profile.tutorialDone = false; saveProfile(profile); showMenu('settings'); break;
+    case 'credits': creditsModal(); break;
     case 'wipe':
       if (el.dataset.armed) { try { localStorage.removeItem('shatterspire.profile.v1'); localStorage.removeItem('shatterspire.run.v1'); } catch { /* ignore */ } profile = loadProfile(); showMenu('main'); }
       else { el.dataset.armed = '1'; el.textContent = 'Tap again to erase everything'; }

@@ -2,9 +2,9 @@
 
 ## >>> PICK UP HERE (2026-11-16, after the vault / map-first / onboarding PR)
 **Owner direction (Brian), in priority order:**
-1. The map is the main focus; Bloons TD 6 is the layout template. Nothing instructional may cover the map.
+1. The map is the main focus; use the standard map-first TD layout. Nothing instructional may cover the map.
 2. A casual first-time player (his girlfriend) must understand and enjoy the first game. Don't remove core mechanics to get there.
-3. He likes the Idle Cat Gunner "diamond auto-collect" loop (1/min up to a cap; he paid to raise the cap to 500). Shatterspire's version is the Shard Vault.
+3. He likes idle-game "currency fills while you are away" loops (1/min up to a cap; he paid to raise the cap to 500). Shatterspire's version is the Shard Vault.
 4. "Use any open source repos to make this game the best it can be."
 5. Workflow: every change via a PR you open and merge yourself (GitHub is signed in in the **built-in browser** of the Claude desktop app, not Chrome). Ship when tests pass, tell him after, always give the play link: https://brutalpeanut.github.io/shatterspire-td/?unlockall (normal players: no `?unlockall`).
 
@@ -63,7 +63,7 @@ Next steps for `design-pass`, in order:
 
 ### Tower explanations + defeat recap (2026-11-15, night)
 - `src/ui/towerInfo.ts`: per-tower role tag, one-liner, good/weak against, base stats, damage type. Shown on Armory cards (tag), the desktop hover tip, the placement bar (+ Info button), the selected-tower panel, and the full info sheet (all 3 upgrade paths).
-- Defeat recap, modelled on BTD6 (continue/retry) and Kingdom Rush (tip on defeat), but with an actual diagnosis. Logic is `src/core/analysis.ts` `analyzeDefeat(g)`: what leaked on the fatal wave, a headline cause, up to 4 tips with tower links, and lives lost per wave.
+- Defeat recap (continue/retry plus a tip), with an actual diagnosis. Logic is `src/core/analysis.ts` `analyzeDefeat(g)`: what leaked on the fatal wave, a headline cause, up to 4 tips with tower links, and lives lost per wave.
   - Causes are checked in this order: boss, giant, immunity (nothing could hurt it), shadowed without True Sight, fast enemies without slows/blockers, then volume.
 - **Retry wave:** `Game.waveStartSave` (snapshot at `startWave`) is restored. Powers from a defeat are granted only when leaving the run (Restart/Menu), so retries can't farm them.
 - Live leak ribbons are grouped every 0.7s ("Leaked: 3 Ogres (−15 lives)"), and the Lives pill shakes.
@@ -116,20 +116,33 @@ Next steps for `design-pass`, in order:
 - Update this file in the same PR.
 
 
-## Bloons-style battle screen (2026-11-16, PR "Battle screen rebuilt on the Bloons layout")
 
-Owner: "I still really hate the UI and it needs to be redone. Make it more like the bloons version."
-The battle screen was rebuilt on the BTD6 layout. Menus, setup, modals and the recap were NOT restyled yet (next step if he likes this).
+## Legal guardrails (owner, 2026-11-16: "Do what's legal") -- applies to every change
+
+Owner wants an epic, grounded high-fantasy look for adults 18-45 (see the brief at the bottom of this section) with zero borrowed IP. Not legal advice; flag doubtful cases to him.
+
+- **No Tolkien names, terms or imagery.** Middle-earth Enterprises holds registered marks on single words (HOBBIT, BALROG, MITHRIL, MIDDLE-EARTH and hundreds more). Banned: hobbit, Middle-earth, Mordor, Shire, Gondor, Rohan, Ent, Balrog, Nazgul, Ringwraith, Uruk-hai, warg, mithril, palantir, any character or place name, a ring quest, a flaming eye, a white-tree emblem, Elvish-style script, movie-logo lettering, film quotes, likenesses, soundalike music.
+- **Generic folklore is fine:** elves, dwarves, orcs, goblins, trolls, ogres, wizards, dragons, wraiths, liches, golems, hydras, treants.
+- **Nothing from other games or franchises** (names, art, icons, sounds, text). Layout conventions and genre mechanics are fine; assets and names are not. Do not name other games in the README, store text, marketing, code comments or these notes.
+- **Assets:** original code-drawn art, or CC0 / OFL / MIT only, each recorded in CREDITS.md with source and licence. No ripped assets, no GPL / non-commercial / share-alike, no AI art prompted with artist or franchise names.
+- **Done in this PR:** Archer path "Hawkeye" (a comic-book archer's name) renamed "Sharpshooter"; other games' names removed from README, comments and notes; CREDITS.md added.
+- **Title check (web search only, 2026-11-16):** no game called "Shatterspire" turned up. Nearby names exist: "Shatterhold" (Steam) and "Shadespire" (a Games Workshop product line). Before a paid store launch do a real USPTO/EUIPO search (classes 9 and 41) or pay a lawyer for one.
+- **Still to do from the 18-45 restyle brief:** muted palette, serif UI type (drop Lilita One), lean realistic proportions, original orchestral ambience, menus restyled; fix boss banners over the map, portrait ability-strip overflow, unreadable medallion labels, locked-vs-unaffordable tile states, "Layers" jargon, and the difficulty cliff at boss waves (bot: Medium flawless, Hard loses 66-142 lives in wave 30 alone).
+
+## Map-first battle screen (2026-11-16, PR #11)
+
+Owner hated the previous battle UI and asked for the standard modern TD layout.
+The battle screen was rebuilt map-first. Menus, setup, modals and the recap were NOT restyled yet (next step if he likes this).
 
 - Markup (src/main.ts): `#game > #stage (canvas, #hud, #abil, #toast) + #rail (#coach, #slot, #tiles) + #ctrl (#autoBtn, #speedBtn, #startBtn) + #tpanel`.
   Old ids are gone: `#field`->`#stage`, `#side`->`#rail`, `#wavebox`->`#slot`, `#sbody`->`#tiles`, `.card`->`.tile`, `.cost`->`.tc`, tower panel `.tp-*`/`.up`->`.tq-*`/`.ug`.
 - All battle CSS lives in `src/battle.css` (imported after style.css). The old battle rules in style.css are dead and can be deleted in a cleanup PR; menus/modals/vault/recap/chips/coach `.cc` in style.css are still live.
 - Layout: map fills the screen; lives/gold top-left and round + Pause top-right drawn over the map edge; slim 2-column rail of icon + price tiles (no names; long-press / (i) opens the info card; tile colour = tower group; ★ = advisor pick); round Auto / Speed / Start buttons under the rail; upgrade panel slides in on the side AWAY from the selected tower (`#tpanel.L`), below the HUD row, with 3 path rows (owned box + green buy button showing the stat delta) and a red Sell.
   Portrait: HUD bar above the map, abilities (left) + round buttons (right) in a strip under the map, tiles below (6 columns, 4 on tall phones), upgrade panel replaces the tile area so it never covers the map.
-- Tile order is hero, Single (Archer first, like the Dart Monkey), Crowd, Control, Support. The tutorial's pulsing tile is scrolled into view (landscape phones scroll the rail).
+- Tile order is hero, Single (Archer first: the cheap starter), Crowd, Control, Support. The tutorial's pulsing tile is scrolled into view (landscape phones scroll the rail).
 - Tower Guide (groups) moved to the Pause menu (`data-m="guide"`).
 - While moving a rally point the upgrade panel hides so the whole road is reachable.
-- Known trade-off to raise with the owner: on desktop/landscape the upgrade panel covers part of the map (opposite side from the tower), exactly like BTD6. His "nothing covers the map" rule was about tooltips/instruction panels while dragging, which still holds (tested). If he objects, dock the panel into the rail instead.
+- Known trade-off to raise with the owner: on desktop/landscape the upgrade panel covers part of the map (opposite side from the tower), the genre convention. His "nothing covers the map" rule was about tooltips/instruction panels while dragging, which still holds (tested). If he objects, dock the panel into the rail instead.
 - `/tmp/shotb.py`-style screenshots: build 5 towers through `__ss.game`, start a wave, click a tower; check 1366x768, 780x360 (touch), 390x844 (touch).
 
 ## Status (2026-11-15)
@@ -148,7 +161,7 @@ The battle screen was rebuilt on the BTD6 layout. Menus, setup, modals and the r
 
 ## Art
 - Maps: src/render/mapArt.ts (noise terrain, textured roads, painted trees/pines/rocks/lava/crystals, cave walls, ambient anim).
-- Towers: src/render/buildings.ts (KR-style structures with back/front layers) + figures in src/render/towerArt.ts.
+- Towers: src/render/buildings.ts (structures with back/front layers) + figures in src/render/towerArt.ts.
 - UI: src/style.css (wood/parchment/stone/gilt, all CSS+SVG), src/ui/icons.ts (SVG icon set), fonts bundled via @fontsource.
 - Menu background is a live "attract mode" demo battle.
 - Enemies: src/render/enemyArt.ts (character models scaled by power, layer colours kept; small ones sprite-cached 8 frames x 2 facings). `window.__ss.enemies()` shows all 18.
