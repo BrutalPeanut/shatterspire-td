@@ -423,17 +423,19 @@ function renderSide() {
   if (key !== panelKey) {
     panelKey = key;
     tpanel.innerHTML = t ? towerPanel(t) : '';
-    tpanel.classList.toggle('on', !!t && !rallyEdit); // while moving a rally point the panel steps aside so the whole road is reachable
-    // the panel opens on the side away from the tower so it never hides it
+    // while moving a rally point the panel steps aside so the whole road is reachable,
+    // and it opens on the side away from the tower so it never hides it
+    tpanel.classList.toggle('on', !!t && !rallyEdit);
     if (t) tpanel.classList.toggle('L', t.x > WORLD_W / 2);
   }
   document.querySelectorAll<HTMLElement>('#tiles [data-cost], #tpanel [data-cost]').forEach((el) => el.classList.toggle('poor', g.gold < Number(el.dataset.cost)));
+  sbody.classList.toggle('more', sbody.scrollHeight > sbody.clientHeight + 2); // fade the bottom row when the list runs past the rail
   if (t) { const st = tpanel.querySelector('.tq-sub'); if (st) st.textContent = towerStatLine(t); }
 }
 
 /** Plain-language combat record for a tower. */
 function towerStatLine(t: Tower) {
-  const parts = [`Damage ${fmtShort(t.dmg)}`, `Layers ${fmtShort(t.pops)}`];
+  const parts = [`Damage ${fmtShort(t.dmg)}`, `Broken ${fmtShort(t.pops)}`];
   if (t.stats.barracks) parts.push(`Held ${fmtShort(t.assists)}`);
   else if (t.assists) parts.push(`Slowed/stunned ${fmtShort(t.assists)}`);
   if (t.stats.income) parts.push(`+${fmt(t.stats.income * t.stats.incomeMult)}/wave`);
@@ -452,12 +454,13 @@ function shopPanel() {
     const cost = g.towerCost(id);
     return towerUnlocked(profile, id)
       ? `<button class="tile" style="--gc:${gc}" data-a="buy" data-v="${id}" data-cost="${cost}" aria-label="${esc(d.name)}">${img(id)}<span class="tc">${ICON.coinSmall}<span>${fmt(cost)}</span></span></button>`
-      : `<button class="tile locked" style="--gc:${gc}" data-a="buy" data-v="${id}" aria-label="${esc(d.name)} (locked)" data-lock="${esc(d.name)} unlocks after ${d.unlockRounds} rounds played (${d.unlockRounds - profile.totalRounds} to go)">${img(id)}<span class="tc">${ICON.lock.replace('class="ico"', 'class="ico sm"')}<span>${d.unlockRounds - profile.totalRounds}</span></span></button>`;
+      : `<button class="tile locked" style="--gc:${gc}" data-a="buy" data-v="${id}" aria-label="${esc(d.name)} (locked)" data-lock="${esc(d.name)} unlocks after ${d.unlockRounds} rounds played (${d.unlockRounds - profile.totalRounds} to go)">${img(id)}<span class="tc lk">${ICON.lock.replace('class="ico"', 'class="ico sm"')}<span>${d.unlockRounds - profile.totalRounds} rds</span></span></button>`;
   };
-  // tile colour = the tower's job (Crowd, Single target, Control, Support)
-  // the cheap starter (Archer) sits in the first row beside the hero
+  // each job gets its own labelled, colour-coded section so the colours mean something at a glance
   const order = ['hero', 'single', 'crowd', 'control', 'support'];
-  return [...GROUPS].sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id)).flatMap((gr) => gr.towers).map(tile).join('');
+  return [...GROUPS].sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id)).map((gr) => `<section class="grp" style="--gc:${gr.color}">
+    <button class="grp-h" data-a="groups" data-v="${gr.id}" title="${esc(gr.how)}"><b>${esc(gr.name)}</b><span>${esc(gr.short)}</span>${ICON.info}</button>
+    <div class="grp-g">${gr.towers.map(tile).join('')}</div><i class="grp-tip">${esc(gr.short)}</i></section>`).join('');
 }
 /** Explains the tower groups and a sensible build order. */
 function creditsModal() {
