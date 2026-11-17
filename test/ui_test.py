@@ -351,6 +351,28 @@ with sync_playwright() as p:
     check('Off' in pg.inner_text('#autoBtn'), 'Auto state visible in landscape')
     check(errs == [], f'no page errors {errs}')
     ctx.close()
+
+    # ------------------------------------------------ phone portrait: everything fits, nothing over the map
+    print('portrait fit (393x713)')
+    ctx = b.new_context(viewport={'width': 393, 'height': 713}, is_mobile=True, has_touch=True, device_scale_factor=2); pg = ctx.new_page()
+    pg.goto(BASE + '&t=pf'); pg.wait_for_timeout(600)
+    pg.tap('[data-g="play"]'); pg.wait_for_timeout(200); pg.tap('.su-go'); pg.wait_for_timeout(500)
+    if pg.locator('#coach.on [data-c="skip"]').count(): pg.tap('#coach [data-c="skip"]')
+    OVER = """() => { const cv = document.querySelector('#canvas').getBoundingClientRect();
+      return [...document.querySelectorAll('.toast, #abil .abw, #ctrl button, #tpanel.on')].filter(e => { const r = e.getBoundingClientRect(); return r.width && r.bottom > cv.top + 2 && r.top < cv.bottom - 2; }).length; }"""
+    t = pg.evaluate("(() => { const e = document.querySelector('#tiles'); return e.scrollHeight <= e.clientHeight + 2 && document.querySelectorAll('.grp-h').length === 5; })()")
+    check(t, 'all five labelled group rows fit under the map without scrolling')
+    pg.tap('#abil .abw'); pg.wait_for_timeout(200)
+    check('Only during a wave' in pg.inner_text('#toast') and pg.evaluate(OVER) == 0, 'messages show in the info box, not over the map')
+    pg.evaluate("(() => { const a = document.querySelector('#abil'); for (let i = 0; i < 2; i++) a.insertBefore(a.children[1].cloneNode(true), a.lastElementChild); })()")
+    fit = pg.evaluate("(() => { const r = [...document.querySelectorAll('#abil .abw')].map(e => e.getBoundingClientRect()); return Math.max(...r.map(x => x.right)) <= document.querySelector('#autoBtn').getBoundingClientRect().left && r.every(x => x.width >= 30); })()")
+    check(fit, 'six ability medallions fit beside the round buttons')
+    pg.evaluate("(() => { const g = __ss.game; g.gold = 5000; for (let x = 80; x < 880; x += 30) for (let y = 80; y < 560; y += 30) if (g.canPlace(x, y, 24)) { g.placeTower('archer', x, y); return; } })()")
+    w = pg.evaluate("(() => { const t = __ss.game.towers[0]; return __ss.worldToClient(t.x, t.y); })()")
+    pg.touchscreen.tap(w['x'], w['y']); pg.wait_for_timeout(250)
+    foot = pg.evaluate("(() => { const f = document.querySelector('#tpanel.on .tq-foot'); return f ? f.getBoundingClientRect().bottom <= innerHeight : false; })()")
+    check(foot and pg.evaluate(OVER) == 0, 'upgrade panel shows all three paths and Sell on screen, off the map')
+    ctx.close()
     b.close()
 
 print(f'\n{len(fails)} failures')

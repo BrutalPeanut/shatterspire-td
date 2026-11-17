@@ -27,15 +27,15 @@ then a run to wave 36+ using abilities and upgrades. Script: see "Playtest scrip
 
 ## Fix order
 
-### PR A: battle-screen bugs (items 1-4) -- DO FIRST
-- [ ] Toasts: no element over `#canvas`. Show one message at a time in `#slot` (the info box under the map /
+### PR A: battle-screen bugs (items 1-4) -- DONE (PR #16)
+- [x] Toasts: no element over `#canvas`. Show one message at a time in `#slot` (the info box under the map /
       top of the rail) for ~2.5s, then restore the wave box. Queue, never stack. Boss/giant warnings also tint
       the Start button. Files: `toast`/`toast2` in `src/main.ts`, `#toast` rules in `src/style.css`.
-- [ ] Portrait abilities: drop the text labels (icon + cooldown only), size medallions so six fit left of the round
+- [x] Portrait abilities: drop the text labels (icon + cooldown only), size medallions so six fit left of the round
       buttons, never under them. Name shows in `#slot` on press. Files: `#abil` rules in `src/battle.css`, `.abw/.ab/.abl`.
-- [ ] Portrait upgrade panel: three path rows + footer must fit in the rail area at 393x713. Put the owned box and
+- [x] Portrait upgrade panel: three path rows + footer must fit in the rail area at 393x713. Put the owned box and
       the buy button on one compact row (about 46px), target selector into the header row.
-- [ ] Tiles: unaffordable = red price + slightly dimmed picture (not black). Price strip shorter. Add a UI test that
+- [x] Tiles: unaffordable = red price + slightly dimmed picture (not black). Price strip shorter. Add a UI test that
       every tile and the Sell button are inside the viewport in portrait.
 
 ### PR B: one visual language (item 5) -- the 18-45 restyle of the battle screen

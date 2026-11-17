@@ -54,7 +54,7 @@
 .tile img { position: absolute; left: 12%; top: 3%; width: 76%; height: auto; pointer-events: none; filter: drop-shadow(0 3px 2px rgba(0, 0, 0, 0.4)); }
 .tc { position: relative; width: 100%; display: flex; align-items: center; justify-content: center; gap: 3px; padding: 2px 0 4px; background: rgba(26, 12, 4, 0.8); color: #fff; font: 400 15px/1 var(--f); }
 .tc .ico { width: 13px; height: 13px; }
-.tile.poor .tc { color: #ff8576; } .tile.poor img { filter: grayscale(0.75) brightness(0.72); }
+.tile.poor .tc { color: #ff8576; } .tile.poor img { filter: grayscale(0.4) brightness(0.9) drop-shadow(0 3px 2px rgba(0, 0, 0, 0.4)); } .tile.poor { background: linear-gradient(180deg, color-mix(in srgb, var(--gc) 45%, #6b5a4c), color-mix(in srgb, var(--gc) 50%, #3a2a20)); }
 .tc.lk { position: static; color: #e6d8c2; font-size: 11px; font-family: 'Nunito', sans-serif; font-weight: 800; white-space: nowrap; }
 /* locked: a padlock over the darkened picture, and the strip says how many rounds to go (so it never reads as a price) */
 .tc.lk .ico { position: absolute; left: 50%; top: 34%; width: 34%; height: auto; aspect-ratio: 1; transform: translate(-50%, -50%); filter: drop-shadow(0 1px 2px #000); }
@@ -84,8 +84,13 @@ body.dragging .tile { cursor: grabbing; }
 #rail #coach .cc { position: relative; } #rail #coach .cc-t b { padding-right: 30px; }
 #rail #coach .cc-n { position: absolute; top: 5px; right: 6px; width: auto; height: auto; padding: 1px 6px; border-radius: 8px; font-size: 10px; box-shadow: none; } #rail #coach .cc-b { flex-direction: row; }
 #rail.coach-hide #coach { display: none; }
-#stage.coach-hide #toast { display: none; }
-#stage #toast { top: 52px; }
+/* messages take over the info box for a moment: one at a time, never over the map */
+#slotw { position: relative; flex: none; }
+#rail #toast { position: absolute; inset: 0; top: 0; left: 0; transform: none; z-index: 8; display: block; pointer-events: none; }
+#rail .toast { display: grid; place-items: center; width: 100%; height: 100%; max-width: none; padding: 4px 10px; border-radius: 11px; font-size: 13px; line-height: 1.15; white-space: normal; text-align: center;
+  box-shadow: inset 0 0 0 2.5px var(--ol), inset 0 4px 0 rgba(255, 255, 255, 0.25); animation: toastIn 2.8s forwards; }
+#rail .toast::before, #rail .toast::after { display: none; }
+@keyframes toastIn { 0% { opacity: 0; transform: scale(0.94); } 6%, 86% { opacity: 1; transform: none; } 100% { opacity: 0; } }
 
 /* ---- round controls under the tower panel */
 #ctrl { grid-area: ctrl; display: flex; align-items: center; justify-content: space-between; gap: 4px; padding: 5px 8px 8px 10px; background: var(--wood); box-shadow: inset 3px 0 0 var(--ol), inset 6px 0 0 rgba(255, 220, 160, 0.22), inset 0 3px 0 rgba(0, 0, 0, 0.25); }
@@ -174,9 +179,11 @@ button.ug:active { transform: translateY(2px); }
   #hud { top: 4px; left: 8px; right: 6px; gap: 12px; }
   .hs { font-size: 22px; -webkit-text-stroke-width: 4px; } .hs .ico { width: 23px; height: 23px; } .hs.round small { font-size: 13px; }
   #pauseBtn { width: 34px; height: 34px; }
-  #stage #abil { left: 6px; bottom: 3px; right: 176px; max-width: none; flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden; zoom: 0.78; scrollbar-width: none; }
+  #stage #abil { left: 6px; bottom: 14px; right: 158px; max-width: none; flex-wrap: nowrap; gap: 4px; padding: 0; align-items: center; }
+  #abil .abw { flex: 0 1 44px; min-width: 0; width: auto; } #abil .abl { display: none; }
+  #abil .ab { width: 100%; height: auto; aspect-ratio: 1; } #abil .ab .ico { width: 60%; height: 60%; } #abil .ab img { width: 84%; height: 84%; } #abil .ab .cdt { font-size: 13px; }
   #ctrl { grid-area: stage; z-index: 4; align-self: end; justify-self: end; padding: 0 6px 7px; gap: 6px; background: none; box-shadow: none; }
-  #ctrl #autoBtn, #ctrl #speedBtn { width: 44px; height: 44px; } #ctrl #startBtn { width: 58px; height: 58px; font-size: 10.5px; } #ctrl #startBtn .ico { width: 24px; height: 24px; }
+  #ctrl #autoBtn, #ctrl #speedBtn { width: 40px; height: 40px; } #ctrl #autoBtn .cl, #ctrl #speedBtn .cl { font-size: 8.5px; } #ctrl #startBtn { width: 56px; height: 56px; font-size: 10.5px; } #ctrl #startBtn .ico { width: 24px; height: 24px; }
   #rail { gap: 5px; padding: 6px 6px calc(6px + env(safe-area-inset-bottom)); box-shadow: inset 0 3px 0 var(--ol), inset 0 6px 0 rgba(255, 220, 160, 0.22); background: linear-gradient(180deg, #a26c38, #7d4f25); }
   #tiles { gap: 4px; padding: 0 0 4px; }
   .grp { display: grid; grid-template-columns: 66px auto minmax(0, 1fr); align-items: stretch; border-radius: 10px; }
@@ -189,12 +196,20 @@ button.ug:active { transform: translateY(2px); }
   .grp-h .ico { display: none; }
   .grp-g { grid-template-columns: repeat(3, var(--th)); gap: 5px; padding: 4px 5px; }
   .tile.rec::after { top: 2px; right: 2px; width: 14px; height: 14px; font-size: 9px; box-shadow: 0 0 0 1.5px var(--ol), 0 0 6px rgba(255, 226, 122, 0.9); }
-  .tile { touch-action: none; border-radius: 10px; } .tc { font-size: 12.5px; padding: 1px 0 3px; } .tc .ico { width: 11px; height: 11px; } .tc.lk { font-size: 9px; }
+  .tile { touch-action: none; border-radius: 10px; } .tile img { top: -2%; } .tc { font-size: 11.5px; padding: 0 0 2px; gap: 2px; background: rgba(26, 12, 4, 0.72); } .tc .ico { width: 10px; height: 10px; } .tc.lk { font-size: 9px; }
   .tile.deployed .tc { font-size: 9.5px; }
   #slot { height: 46px; } .sl { padding: 3px 7px; gap: 1px; } .sl b { font-size: 13px; } .sl-u { font-size: 10.5px; } .sl-c { height: 15px; } .sl-c .chip { font-size: 8.5px; }
   #tpanel { grid-area: rail; justify-self: stretch; width: auto; margin-top: 0; border-radius: 0; box-shadow: inset 0 3px 0 var(--ol); background: linear-gradient(180deg, #a26c38, #7d4f25); padding: 8px 8px calc(8px + env(safe-area-inset-bottom)); }
   #tpanel.L { justify-self: stretch; }
-  .tq-path { grid-template-columns: 34% minmax(0, 1fr); }
+  .tq-path { grid-template-columns: 34% minmax(0, 1fr); gap: 5px; }
+  /* everything, Sell included, fits in the area under the map */
+  #tpanel { padding: 6px 6px calc(6px + env(safe-area-inset-bottom)); gap: 4px; overflow-y: auto; }
+  .tq-head img { width: 36px; height: 36px; } .tq-name { font-size: 15.5px; } .tq-sub { margin-top: 1px; font-size: 10.5px; } .tq-ib { width: 30px; height: 30px; }
+  .tq-target { padding: 2px; font-size: 13px; } .tq-target button { height: 24px; }
+  .tq-own { padding: 3px 6px; gap: 2px; } .tq-own b { font-size: 11.5px; } .tq-own small { font-size: 8.5px; } .tq-own .pip { width: 7px; height: 7px; }
+  .ug { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-content: center; column-gap: 6px; row-gap: 1px; min-height: 44px; padding: 3px 8px; }
+  .ug b { grid-column: 1; font-size: 13px; } .ug .udl { grid-column: 1; font-size: 9.5px; line-height: 1.1; } .ug .uc { grid-column: 2; grid-row: 1 / span 2; align-self: center; font-size: 14px; }
+  .tq-btn { padding: 7px 6px; font-size: 14px; } .tq-ab { padding: 3px 7px; font-size: 10px; } .tq-ab b { font-size: 12.5px; } .tq-note { font-size: 10.5px; }
 }
 @media (orientation: portrait) and (min-height: 780px) {
   #game.on { --th: min(76px, (100vh - 66.67vw - 195px) / 5 - 12px); }
