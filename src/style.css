@@ -541,7 +541,7 @@ body.dragging, body.dragging * { cursor: grabbing !important; }
 @media (max-height: 520px) and (orientation: landscape) { .vault { margin: 4px 0 0; padding: 6px 10px 7px; } .v-bar { margin: 5px 0; height: 16px; } .v-btns button { min-height: 34px; } }
 
 /* ===================================================================
-   Map-first layout (Bloons-style): in landscape the battlefield takes the full height and
+   Map-first layout: in landscape the battlefield takes the full height and
    everything else lives in one slim rail on the right: stats, controls, next wave, towers.
    =================================================================== */
 @media (orientation: landscape) {

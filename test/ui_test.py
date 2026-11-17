@@ -32,6 +32,10 @@ with sync_playwright() as p:
     ctx = b.new_context(viewport={'width': 1366, 'height': 768}); pg = ctx.new_page(); errs = []
     pg.on('pageerror', lambda e: errs.append(str(e)))
     pg.goto(BASE + '&t=d1'); pg.wait_for_timeout(700)
+    pg.click('[data-g="settings"]'); pg.click('[data-g="credits"]'); pg.wait_for_timeout(80)
+    check('SIL Open Font License' in pg.inner_text('#modal') and 'original game' in pg.inner_text('#modal'), 'Settings > Credits lists the font licences')
+    pg.click('[data-m="resume"]'); pg.click('[data-g="main"]'); pg.wait_for_timeout(80)
+    check(pg.locator('#modal.on').count() == 0 and pg.locator('[data-g="play"]').count() == 1, 'Credits closes back to the menu')
     new_game(pg)
     # 1. normal multi-step drag
     c = pg.locator('.tile[data-v="archer"]').bounding_box(); s = pg.evaluate(FIND_SPOT, True)

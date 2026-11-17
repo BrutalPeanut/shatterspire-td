@@ -98,7 +98,7 @@ export function recommendTower(g: Game, round: number): { tower: string; why: st
     }
   }
   const shadow = wi.threats.some((t) => t.tag === 'SHADOWED');
-  if (shadow && !g.towers.some((t) => t.stats.trueSight || t.buffs.trueSight || t.stats.aura?.trueSight)) return { tower: 'archer', why: 'Shadowed enemies are invisible: upgrade an Archer to Eagle Eye (Hawkeye path)' };
+  if (shadow && !g.towers.some((t) => t.stats.trueSight || t.buffs.trueSight || t.stats.aura?.trueSight)) return { tower: 'archer', why: 'Shadowed enemies are invisible: upgrade an Archer to Eagle Eye (Sharpshooter path)' };
   if ((wi.giant || wi.boss) && !has('ballista')) return { tower: 'ballista', why: 'Big enemies need heavy single hits' };
   if (atk.length < 2) return { tower: 'knight', why: 'Put it on a bend: it hits everything in reach' };
   if (round >= 4 && !has('knight') && !has('mage') && !has('cannon')) return { tower: 'cannon', why: 'Crowds are coming: explosions hit the whole group' };

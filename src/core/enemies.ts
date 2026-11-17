@@ -1,6 +1,6 @@
 import type { EnemyDef } from './types';
 
-// Layered enemies, Bloons-style: destroying a layer reveals its children.
+// Layered enemies: destroying a layer reveals its children.
 // Speeds are px/second in world units.
 const list: EnemyDef[] = [
   { id: 'imp', name: 'Imp', hp: 1, speed: 62, radius: 9, children: [], color: '#e5483b', immune: [], rank: 1, gold: 1 },

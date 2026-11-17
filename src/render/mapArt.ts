@@ -1,4 +1,4 @@
-// Painted map backgrounds in the style of hand-painted TD maps (Kingdom Rush-like):
+// Painted map backgrounds in a hand-painted style:
 // noise-textured terrain, textured roads with ruts and edge stones, framing foliage,
 // water with banks, lava, crystals and set pieces. Light comes from the top-left.
 import type { MapDef, Obstacle } from '../core/maps';

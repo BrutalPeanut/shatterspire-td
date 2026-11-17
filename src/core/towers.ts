@@ -17,7 +17,7 @@ const faster = (a: Attack | undefined, m: number) => { if (a) a.cd *= m; };
 const archer: TowerDef = {
   id: 'archer', name: 'Archer', cost: 200, color: '#3f8f3a', accent: '#c9a35b', radius: 16, unlockRounds: 0,
   desc: 'Cheap, reliable arrows. Sharp damage: cannot hurt Ironclads until upgraded.',
-  paths: ['Volley', 'Hawkeye', 'Elven Fire'],
+  paths: ['Volley', 'Sharpshooter', 'Elven Fire'],
   base: () => stats([{ id: 'main', kind: 'proj', cd: 0.95, damage: 1, pierce: 2, range: 130, speed: 620, dtype: 'sharp', visual: 'arrow', color: '#6b4a2b' }]),
   upgrades: [
     [
@@ -292,7 +292,7 @@ const mine: TowerDef = {
   ],
 };
 
-// ---- Barracks (Kingdom Rush-style blockers) ---------------------------------
+// ---- Barracks (soldiers that block the road) ---------------------------------
 const barracks: TowerDef = {
   id: 'barracks', name: 'Barracks', cost: 400, color: '#7d4f2e', accent: '#c94a3a', radius: 18, unlockRounds: 0,
   desc: 'Soldiers march onto the path and hold enemies in place. Giants trample them until upgraded.',
@@ -335,7 +335,7 @@ export function computeStats(def: TowerDef, tiers: number[]): TowerStats {
   return s;
 }
 
-/** BTD6-style crosspathing: max 2 paths, only one past tier 2. */
+/** Crosspathing: max 2 paths, only one past tier 2. */
 export function canUpgradePath(tiers: number[], p: number): boolean {
   if (tiers[p] >= 5) return false;
   const next = tiers.slice();
