@@ -39,9 +39,9 @@ document.getElementById('app')!.innerHTML = `
       <div class="hs round" title="Wave"><small>Round</small><span id="round">0</span></div>
       <button class="cb" id="pauseBtn" title="Pause (P / Esc)">${ICON.pause}</button>
     </div>
-    <div id="abil"></div><div id="toast"></div>
+    <div id="abil"></div>
   </div>
-  <div id="rail"><div id="coach"></div><div id="slot"></div><div id="tiles"></div></div>
+  <div id="rail"><div id="coach"></div><div id="slotw"><div id="slot"></div><div id="toast"></div></div><div id="tiles"></div></div>
   <div id="ctrl">
     <button class="cb" id="autoBtn" title="Auto-start the next wave">${ICON.auto}<span class="cl">Auto <b id="autoState">Off</b></span></button>
     <button class="cb" id="speedBtn" title="Game speed (F)">${ICON.speed}<span class="cl" id="spd">1×</span></button>
@@ -102,15 +102,13 @@ function dropOnMap(ev: { clientX: number; clientY: number; pointerType?: string 
   return p.x >= 0 && p.x <= WORLD_W && p.y >= 0 && p.y <= WORLD_H;
 }
 
+let toastT = 0;
+/** One message at a time, shown in the info box beside/below the map. Nothing is ever drawn over the map. */
 function toast(msg: string, kind: 'info' | 'bad' | 'good' = 'info') {
   const box = $('#toast');
-  // drop duplicates of the same message so repeated taps don't stack ribbons
-  for (const el of Array.from(box.children)) if (el.textContent === msg) el.remove();
-  while (box.children.length > 2) box.firstElementChild!.remove();
-  const el = document.createElement('div');
-  el.className = `toast ${kind}`; el.textContent = msg;
-  box.appendChild(el);
-  setTimeout(() => el.remove(), 3000);
+  box.innerHTML = `<div class="toast ${kind}">${esc(msg)}</div>`;
+  clearTimeout(toastT);
+  toastT = window.setTimeout(() => { box.innerHTML = ''; }, 2800);
 }
 
 // ================================================================ placement
