@@ -1,5 +1,7 @@
 # Handoff notes
 
+## >>> START HERE: `docs/UI_PLAN.md` is the current work list (UI fixes in order, with checkboxes). Do PR A, then B, C, D.
+
 ## >>> PICK UP HERE (2026-11-16, after the vault / map-first / onboarding PR)
 **Owner direction (Brian), in priority order:**
 1. The map is the main focus; use the standard map-first TD layout. Nothing instructional may cover the map.
