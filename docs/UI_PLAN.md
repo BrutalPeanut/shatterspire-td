@@ -38,12 +38,14 @@ then a run to wave 36+ using abilities and upgrades. Script: see "Playtest scrip
 - [x] Tiles: unaffordable = red price + slightly dimmed picture (not black). Price strip shorter. Add a UI test that
       every tile and the Sell button are inside the viewport in portrait.
 
-### PR B: one visual language (item 5) -- the 18-45 restyle of the battle screen
-- [ ] Replace Lilita One in battle with Cinzel (labels, buttons) and Nunito 800 (numbers). Remove the font package.
-- [ ] Rail and panels: dark slate/leather with thin gold borders (reuse the menu panel look), not bright wood.
-- [ ] Group colours muted (same hues, lower saturation), headers engraved rather than glossy.
-- [ ] Round buttons: iron/gold rings; Start stays the one saturated element.
-- [ ] Map art: lower saturation, cooler shadows, fog at the edges (`src/render/mapArt.ts`). Units leaner (owner rule).
+### PR B: one visual language (item 5) -- FIRST PASS DONE (PR #17): dark iron/leather rail and panels, gold lines, Cinzel lettering, Nunito numbers, muted group colours, map desaturated with a CSS filter
+- [x] Battle uses Cinzel (labels, buttons) and Nunito 800 (numbers).
+- [ ] Lilita One is still used by a few menu/vault numbers in `src/style.css`; swap those, then remove the font package and its CREDITS row.
+- [x] Rail and panels: dark slate/leather with thin gold borders (reuse the menu panel look), not bright wood.
+- [x] Group colours muted (same hues, lower saturation), headers engraved rather than glossy.
+- [x] Round buttons: iron/gold rings; Start stays the one saturated element.
+- [ ] Map art: currently only a CSS filter on `#canvas` (saturate 0.8). Do it properly in `src/render/mapArt.ts`: cooler shadows, fog at the edges, less cartoon outline. Units leaner (owner rule).
+- [ ] Ability medallions and the tutorial coach panel still use the old parchment/wood look in battle.
 
 ### PR C: menus (item 7)
 - [ ] How to Play becomes 5 short cards with a picture each, no emoji.

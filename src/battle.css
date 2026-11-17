@@ -219,3 +219,49 @@ button.ug:active { transform: translateY(2px); }
   .tile img { width: 66%; left: 17%; }
 }
 #stage #abil { padding-top: 6px; }
+
+/* =====================================================================================================
+   One visual language with the menus: dark iron and leather, thin gold lines, engraved serif lettering.
+   (Second pass over the layout above; overrides only colour, type and finish.)
+   ===================================================================================================== */
+#game.on { --ol: #0f0b08; --gl: #b8975a; --f: 'Cinzel', Georgia, serif; --num: 'Nunito', sans-serif;
+  --wood: linear-gradient(180deg, #2c2722, #1b1714); }
+#stage { background: #0c0a08; }
+#stage #canvas { filter: saturate(0.8) contrast(1.05) brightness(0.96); }
+#rail, #ctrl { background: var(--noise), var(--wood); box-shadow: inset 2px 0 0 var(--ol), inset 3px 0 0 rgba(184, 151, 90, 0.55); }
+#tpanel { background: var(--noise), var(--wood); box-shadow: inset 0 0 0 2px var(--ol), inset 0 0 0 3px rgba(184, 151, 90, 0.55), -6px 0 18px rgba(0, 0, 0, 0.5); }
+/* lettering: engraved caps for words, a plain bold face for numbers so they stay readable at a glance */
+.hs, .tc, .ug .uc, .ab .cdt, #spd, .tq-btn, #abil .ab .cdt { font-family: var(--num); font-weight: 800; }
+.hs { font-size: 24px; -webkit-text-stroke: 4px var(--ol); color: #f3ead8; } .hs.gold { color: #e9c86a; } .hs.round small { font: 700 12px/1 var(--f); letter-spacing: 0.08em; text-transform: uppercase; color: #cdb98f; -webkit-text-stroke: 3px var(--ol); }
+.cb { font-weight: 700; letter-spacing: 0.02em; box-shadow: inset 0 0 0 2px var(--ol), inset 0 0 0 3.5px rgba(184, 151, 90, 0.75), inset 0 6px 0 rgba(255, 255, 255, 0.12), 0 3px 0 var(--ol); }
+#pauseBtn, #ctrl #startBtn.running { background: radial-gradient(circle at 50% 30%, #4a4038, #26201b); }
+#ctrl #autoBtn, #ctrl #speedBtn { background: radial-gradient(circle at 50% 30%, #4a4640, #24211e); color: #d9cfbd; }
+#ctrl #autoBtn.on, #ctrl #speedBtn.on { background: radial-gradient(circle at 50% 30%, #7d6a3a, #40351c); color: #ffe9b0; }
+#ctrl #startBtn { background: radial-gradient(circle at 50% 30%, #5f9c3e, #2a5a1c); }
+.sl { background: rgba(10, 8, 6, 0.7); box-shadow: inset 0 0 0 1.5px rgba(184, 151, 90, 0.5); } .sl b { font-weight: 700; letter-spacing: 0.02em; color: #f0e2c0; } .sl-u { color: #cfc3ad; }
+/* group sections: engraved plate instead of glossy candy */
+.grp { background: color-mix(in srgb, var(--gc) 14%, rgba(8, 6, 5, 0.72)); box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--gc) 70%, #000); }
+.grp-h { background: linear-gradient(180deg, color-mix(in srgb, var(--gc) 88%, #fff), color-mix(in srgb, var(--gc) 78%, #000)); box-shadow: inset 0 -1.5px 0 var(--ol), inset 0 1px 0 rgba(255, 255, 255, 0.22); }
+.grp-h b { font-weight: 900; letter-spacing: 0.06em; text-transform: uppercase; font-size: 11px; }
+.tile { background: linear-gradient(180deg, color-mix(in srgb, var(--gc) 70%, #d8cfc0), color-mix(in srgb, var(--gc) 82%, #000)); box-shadow: inset 0 0 0 2px var(--ol), inset 0 0 0 3px rgba(184, 151, 90, 0.5), 0 2px 0 var(--ol); }
+.tile.sel { box-shadow: inset 0 0 0 2px var(--ol), 0 0 0 2.5px #e9c86a, 0 0 12px 3px rgba(233, 200, 106, 0.8); }
+.tc { background: rgba(8, 6, 5, 0.82); color: #f0e2c0; } .tile.poor .tc { color: #e0786a; }
+.tile.rec::after { background: #e9c86a; }
+/* upgrade panel */
+.tq-name { font-weight: 900; letter-spacing: 0.04em; -webkit-text-stroke: 0; color: #f0e2c0; text-shadow: 0 2px 0 var(--ol); } .tq-sub { color: #cdb98f; }
+.tq-ib { box-shadow: inset 0 0 0 2px var(--ol), inset 0 0 0 3.5px rgba(184, 151, 90, 0.7), 0 2px 0 var(--ol); } .tq-info { background: #34506f; } .tq-x { background: #7d2f26; }
+.tq-target { background: rgba(8, 6, 5, 0.6); font-weight: 700; } .tq-target b { color: #e9c86a; font-weight: 700; } .tq-target button { background: linear-gradient(#4a4038, #26201b); box-shadow: inset 0 0 0 1.5px rgba(184, 151, 90, 0.6); }
+.tq-path.p0 { --pc: #c9705c; } .tq-path.p1 { --pc: #7fa3cc; } .tq-path.p2 { --pc: #8fb86a; }
+.tq-own { background: rgba(8, 6, 5, 0.62); box-shadow: inset 0 0 0 1.5px var(--pc); } .tq-own b { font-weight: 700; }
+.ug { background: linear-gradient(#4f8a36, #26521a); box-shadow: inset 0 0 0 2px var(--ol), inset 0 0 0 3px rgba(233, 200, 106, 0.55), 0 2px 0 var(--ol); } .ug b { font-weight: 700; letter-spacing: 0.02em; }
+.ug.poor { background: linear-gradient(#7a3a30, #45201a); } .ug.closed, .ug.max { background: #2a2622; color: #a99c88; box-shadow: inset 0 0 0 1.5px rgba(184, 151, 90, 0.3); }
+.ug .uc { color: #f3dc94; }
+.tq-btn.sell { background: linear-gradient(#8f3a2e, #55201a); } .tq-btn.blue { background: linear-gradient(#3f6c9e, #24405f); } .tq-btn.gold { background: linear-gradient(#d9b45a, #8a6a22); }
+.tq-btn { box-shadow: inset 0 0 0 2px var(--ol), inset 0 0 0 3px rgba(184, 151, 90, 0.5), 0 2px 0 var(--ol); }
+.tq-ab { background: rgba(8, 6, 5, 0.62); box-shadow: inset 0 0 0 1.5px rgba(184, 151, 90, 0.35); } .tq-ab.has { box-shadow: inset 0 0 0 1.5px #8fb86a; } .tq-ab b { font-weight: 700; }
+@media (orientation: portrait) {
+  #rail, #tpanel { background: var(--noise), linear-gradient(180deg, #2c2722, #1b1714); box-shadow: inset 0 2px 0 var(--ol), inset 0 3px 0 rgba(184, 151, 90, 0.55); }
+  .hs { font-size: 20px; } .grp-h b { font-size: 10px; letter-spacing: 0.04em; } .grp-tip { font-weight: 700; font-family: var(--num); }
+}
+.cb .cl { font-size: 8.5px; letter-spacing: 0; } #ctrl #startBtn .cl { font-size: 10.5px; }
+@media (orientation: portrait) { #ctrl #autoBtn .cl, #ctrl #speedBtn .cl { font-size: 7px; } #ctrl #startBtn .cl { font-size: 9px; } }
