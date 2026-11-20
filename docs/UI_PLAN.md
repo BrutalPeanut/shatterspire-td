@@ -53,6 +53,10 @@ then a run to wave 36+ using abilities and upgrades. Script: see "Playtest scrip
 - [ ] Main menu: Continue/Play large, vault below, footer stats.
 
 ### PR D: tension (item 6)
+**Measured 2026-11-20 with `bash test/balance.sh` (6 bot seeds x 4 maps):** the real cliff is the boss waves 30 and 40, not waves 25-28.
+Medium spender wins 0/6 on Ember Wastes and Summit and 2/6 on Crystal Caverns; nearly every loss is a single wave taking 60+ lives
+from a run that had leaked nothing before. Easy spender wins everything. Fix the boss waves (lich on 30, wave 40), then add mid-game
+pressure. Muse's wave 23-28 / interest / cannon tuning (PR #18) is in; it was roughly neutral (37/72 wins vs 35/72).
 - [ ] See the balance notes in NOTES.md (`design-pass` branch). Goal: lose 5-25% of lives across waves 5-25 on Easy
       with a careless build; boss leaks hurt but do not end a healthy run.
 

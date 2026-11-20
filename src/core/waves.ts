@@ -28,12 +28,12 @@ export const WAVES: WaveGroup[][] = [
   /* 20 */[g('ogre', 20, 0.4), g('golemking', 1, 1, 6)],
   /* 21 */[g('gloom', 20, 0.4), g('iron', 4, 1.5, 4)],
   /* 22 */[g('ogre', 25, 0.25), g('wraith', 10, 0.6, 4, 'r')],
-  /* 23 */[g('orc', 20, 0.3, 0, 's'), g('iron', 8, 1, 4), g('hexling', 8, 0.6, 8)],
-  /* 24 */[g('hydra', 15, 0.7)],
-  /* 25 */[g('ogre', 30, 0.2), g('golem', 6, 1.2, 4)],
-  /* 26 */[g('golem', 10, 1.5), g('behemoth', 1, 1, 5)], // first giant. Same enemies as before, half the density (was 0.8s spacing)
+  /* 23 */[g('orc', 20, 0.3, 0, 's'), g('iron', 8, 1, 4), g('hexling', 8, 0.6, 8), g('hydra', 3, 1.5, 11)], // first hydras arrive in a small group
+  /* 24 */[g('hydra', 15, 0.7), g('golem', 2, 2, 8)], // first golems arrive in a small group
+  /* 25 */[g('ogre', 24, 0.2), g('golem', 4, 1.2, 4)], // 536 RBE (was 774)
+  /* 26 */[g('golem', 8, 1.5), g('behemoth', 1, 1, 5)], // first giant. Same enemies as before, half the density (was 0.8s spacing)
   /* 27 */[g('wraith', 15, 0.5, 0, 's'), g('iron', 10, 0.8, 4)],
-  /* 28 */[g('golem', 12, 1.0), g('hydra', 10, 0.8, 5, 'r')], // same enemies, less burst (was 0.6s / 0.5s)
+  /* 28 */[g('golem', 10, 1.0), g('hydra', 10, 0.8, 5, 'r')], // same enemies, less burst (was 0.6s / 0.5s)
   /* 29 */[g('wraith', 20, 0.3), g('behemoth', 2, 3, 6)],
   /* 30 */[g('golem', 10, 0.8), g('lich', 1, 1, 6)],
   /* 31 */[g('hydra', 30, 0.3), g('behemoth', 3, 2.5, 6)],

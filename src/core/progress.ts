@@ -6,7 +6,7 @@ export const PERKS: Perk[] = [
   { id: 'purse', branch: 'economy', tier: 1, name: 'Starting Purse', desc: '+150 starting gold' },
   { id: 'tax', branch: 'economy', tier: 1, name: 'Tax Collector', desc: '+15% end-of-round gold' },
   { id: 'thrift', branch: 'economy', tier: 1, name: 'Thrifty Builders', desc: 'Towers & upgrades 4% cheaper' },
-  { id: 'banker', branch: 'economy', tier: 2, name: "Banker's Insight", desc: 'Interest cap raised from 40 to 80' },
+  { id: 'banker', branch: 'economy', tier: 2, name: "Banker's Insight", desc: 'Interest cap raised from 20 to 40' },
   { id: 'academy', branch: 'economy', tier: 2, name: 'Hero Academy', desc: 'Heroes gain 25% more XP' },
   { id: 'steel', branch: 'military', tier: 1, name: 'Tempered Steel', desc: 'Sharp attacks 8% faster' },
   { id: 'study', branch: 'military', tier: 1, name: 'Arcane Study', desc: 'Magic attacks +10% range' },
