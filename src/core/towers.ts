@@ -232,10 +232,10 @@ const bard: TowerDef = {
 
 // ---- Dwarven Cannon ---------------------------------------------------------
 const cannon: TowerDef = {
-  id: 'cannon', name: 'Dwarven Cannon', cost: 550, color: '#5c5c66', accent: '#e0a030', radius: 18, unlockRounds: 0,
+  id: 'cannon', name: 'Dwarven Cannon', cost: 500, color: '#5c5c66', accent: '#e0a030', radius: 18, unlockRounds: 0,
   desc: 'Explosive shells hit crowds. Blast cannot hurt Glooms.',
   paths: ['Big Bombs', 'Rapid Fire', 'Concussive'],
-  base: () => stats([{ id: 'main', kind: 'proj', cd: 1.4, damage: 1, pierce: 1, range: 140, speed: 460, splash: 32, splashPierce: 14, dtype: 'blast', visual: 'bomb', color: '#2a2a2a', size: 7 }]),
+  base: () => stats([{ id: 'main', kind: 'proj', cd: 1.4, damage: 2, pierce: 1, range: 140, speed: 460, splash: 32, splashPierce: 14, dtype: 'blast', visual: 'bomb', color: '#2a2a2a', size: 7 }]),
   upgrades: [
     [
       U('Bigger Bombs', 350, 'Bigger blast radius', (s) => { main(s).splash! += 10; main(s).splashPierce! += 8; }),

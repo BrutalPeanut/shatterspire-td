@@ -1003,7 +1003,7 @@ function showMenu(screen: 'main' | 'play' | 'tree' | 'settings' | 'how' | 'shop'
       <p>⬆ <b>Upgrades:</b> every tower has 3 paths of 5 tiers. You can upgrade 2 paths, and only one of them past tier 2 (e.g. 5-2-0).</p>
       <p>🚩 <b>Barracks</b> soldiers hold enemies in place. The flag shows where they stand; use <i>Move Rally Point</i> to post them anywhere on the road nearby.</p>
       <p>⏱ <b>Spells and abilities recharge only while a wave is running</b>, in game time, so 2×/3× speed recharges them faster. Between waves the timer waits (⏸). Reinforce Walls can be cast any time but can't raise lives above your starting total.</p>
-      <p>💰 You earn gold for every layer popped, a bonus each wave, and 1% interest on banked gold (max 40). Gold in the bank doesn't defend you, so spend it before big waves.</p>
+      <p>💰 You earn gold for every layer popped, a bonus each wave, and 0.5% interest on banked gold (max 20). Gold in the bank doesn't defend you, so spend it before big waves.</p>
       <p>⌨️ PC: Space = next wave, F = speed, A = auto, P/Esc = pause, 1-0 = towers, Shift = keep building, , . / = upgrade paths, Delete = sell.</p>
       </div><button class="mbtn btn3d woodb" data-g="main" style="margin-top:16px">Back</button>`;
   }

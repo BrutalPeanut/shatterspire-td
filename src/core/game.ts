@@ -545,7 +545,7 @@ export class Game {
     let reward = 125 + 6 * r;
     if (this.freeplay) reward = Math.floor(reward * 0.5);
     if (this.perks.has('tax')) reward = Math.floor(reward * 1.15);
-    const interest = Math.min(this.perks.has('banker') ? 80 : 40, Math.floor(this.gold * 0.01));
+    const interest = Math.min(this.perks.has('banker') ? 40 : 20, Math.floor(this.gold * 0.005));
     this.gold += reward + interest;
     for (const t of this.towers) {
       const s = t.stats;

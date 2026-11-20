@@ -29,6 +29,13 @@ export function runBot(mapId: string, diff: Difficulty, maxRound = 40, heroId = 
     const near = map.paths.some((p) => distToPath(x, y, p) < 70);
     spots.push({ x, y, cover: cover + (near ? 10 : 0) });
   }
+  // BOTSEED varies the bot's own play (placement jitter) so one rule change can be judged over many playthroughs
+  // instead of a single deterministic run. Unset = the original deterministic bot.
+  if (process.env.BOTSEED) {
+    let st = Number(process.env.BOTSEED) * 2654435761 >>> 0;
+    const rnd = () => { st = (st + 0x6d2b79f5) >>> 0; let t = st; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+    for (const sp of spots) sp.cover *= 0.75 + rnd() * 0.5;
+  }
   spots.sort((a, b) => b.cover - a.cover);
   let orderIdx = 0;
   const plans = new Map<number, number>();
