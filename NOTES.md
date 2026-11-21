@@ -219,3 +219,9 @@ The battle screen was rebuilt map-first. Menus, setup, modals and the recap were
 ## Ideas / next
 - Playtest feedback from Brian; tune boss HP and late-wave density.
 - Parked: merge mode, async/real-time multiplayer, roguelike relics.
+
+## Audio (calm-audio PR)
+- Every pitched sound comes from ONE scale: D minor pentatonic (D F G A C), via `deg(i)` in `src/audio/audio.ts`. No half-steps or tritones, so nothing can clash however many towers fire. Never add a pitch that isn't `deg(n)`.
+- Bells are harmonic `chime()` (integer partials); no inharmonic FM. Reverb is 1.7 s, light sends (sfx 0.1, music 0.32). Pops are rate-limited (45 ms) with an 18-voice cap counted over 220 ms.
+- Music: Dm-F-C-Dm-Am-F-G-Dm, every chord built from scale tones; pads release before the next bar. Combat adds tuned taiko, a shaker and a pulse bass.
+- Preview: `a.init(new OfflineAudioContext(...)); a.scheduleMusic(sec, combatAt); a.play(name, {at})` renders offline (see the PR for the render script).
