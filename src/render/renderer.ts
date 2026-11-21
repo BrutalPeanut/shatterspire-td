@@ -40,8 +40,9 @@ export class Renderer {
   dpr = 1;
   constructor(public canvas: HTMLCanvasElement) { this.ctx = canvas.getContext('2d')!; }
 
-  resize(cssW: number, cssH: number) {
-    this.dpr = Math.min(2, window.devicePixelRatio || 1);
+  /** maxDpr caps the pixel density; it must be applied here, before the buffer is sized, or drawing covers only part of it. */
+  resize(cssW: number, cssH: number, maxDpr = 2) {
+    this.dpr = Math.min(maxDpr, window.devicePixelRatio || 1);
     this.canvas.width = Math.round(cssW * this.dpr);
     this.canvas.height = Math.round(cssH * this.dpr);
     this.canvas.style.width = cssW + 'px';

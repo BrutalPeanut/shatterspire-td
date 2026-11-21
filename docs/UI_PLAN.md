@@ -61,6 +61,7 @@ pressure. Muse's wave 23-28 / interest / cannon tuning (PR #18) is in; it was ro
       with a careless build; boss leaks hurt but do not end a healthy run.
 
 ## Done so far
+- PR #19 full modern rework (see NOTES.md "Modern UI rework"): replaces PR B's restyle and most of PR C (menus, How to Play cards, perks naming, switches).
 - PR #11 map-first battle layout. PR #14 labelled, colour-coded group sections. PR #12 legal cleanup.
 
 ## Playtest script

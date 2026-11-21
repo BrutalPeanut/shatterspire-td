@@ -10,12 +10,11 @@ Shatterspire is an original game. It is not affiliated with, endorsed by, or bas
 | --- | --- | --- |
 | Game code | Written for this project | Proprietary (all rights reserved) |
 | Map, tower, hero and enemy art | Drawn in code (`src/render/`) | Proprietary |
-| UI icons | Drawn as inline SVG (`src/ui/icons.ts`) | Proprietary |
+| UI icons | Drawn as inline SVG for this game (`src/ui/icons.ts`) | Proprietary |
 | Sound and music | Synthesised at runtime (`src/audio/audio.ts`) | Proprietary |
+| Inter | (c) 2016 The Inter Project Authors, via `@fontsource-variable/inter` (Latin subset) | SIL OFL 1.1 (`public/licenses/OFL-inter.txt`) |
 | Cinzel | (c) 2020 The Cinzel Project Authors, via `@fontsource/cinzel` | SIL OFL 1.1 (`public/licenses/OFL-cinzel.txt`) |
 | Cinzel Decorative | (c) 2012 Natanael Gama, via `@fontsource/cinzel-decorative` | SIL OFL 1.1 (`public/licenses/OFL-cinzel-decorative.txt`) |
-| Lilita One | (c) 2011 Juan Montoreano, via `@fontsource/lilita-one` | SIL OFL 1.1 (`public/licenses/OFL-lilita-one.txt`) |
-| Nunito | (c) 2014 The Nunito Project Authors, via `@fontsource/nunito` | SIL OFL 1.1 (`public/licenses/OFL-nunito.txt`) |
 
 No third-party images, sprites, audio files or code are bundled into the game.
 
