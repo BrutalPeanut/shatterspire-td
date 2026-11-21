@@ -363,6 +363,9 @@ with sync_playwright() as p:
       return [...document.querySelectorAll('.toast, #abil .abw, #ctrl button, #tpanel.on')].filter(e => { const r = e.getBoundingClientRect(); return r.width && r.bottom > cv.top + 2 && r.top < cv.bottom - 2; }).length; }"""
     t = pg.evaluate("(() => { const e = document.querySelector('#tiles'); return e.scrollHeight <= e.clientHeight + 2 && document.querySelectorAll('.grp-h').length === 5; })()")
     check(t, 'all five labelled group rows fit under the map without scrolling')
+    cards = pg.evaluate("""(() => { const t = [...document.querySelectorAll('.tile')]; const clip = [...document.querySelectorAll('.tile .tn, .tile .tc')].filter(e => e.scrollWidth > e.clientWidth + 1 || e.getBoundingClientRect().right > e.closest('.tile').getBoundingClientRect().right + 1);
+      return { named: t.every(e => (e.querySelector('.tn')?.textContent || '').length > 2 && getComputedStyle(e.querySelector('.tn')).display !== 'none'), clip: clip.length, w: Math.min(...t.map(e => e.getBoundingClientRect().width)) }; })()""")
+    check(cards['named'] and cards['clip'] == 0 and cards['w'] >= 75, f'tower cards are big ({cards["w"]:.0f}px), named, and no label overflows')
     pg.tap('#abil .abw'); pg.wait_for_timeout(200)
     check('Only during a wave' in pg.inner_text('#toast') and pg.evaluate(OVER) == 0, 'messages show in the info box, not over the map')
     pg.evaluate("(() => { const a = document.querySelector('#abil'); for (let i = 0; i < 2; i++) a.insertBefore(a.children[1].cloneNode(true), a.lastElementChild); })()")

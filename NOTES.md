@@ -230,3 +230,9 @@ The battle screen was rebuilt map-first. Menus, setup, modals and the recap were
 - A boss reaching the Spire no longer ends the run. It costs `bossLeak(def.leakLives, hp, maxHp)` = leakLives × remaining-health fraction, min 3 (Golem King 60, Lich 100, Dragon 160). Brian lost a 73-life run to a Golem King at 1/400 HP.
 - Cliff smoothing: Lich HP 1600→1150, Dragon 6400→4800, wave-30 escort 10→7 golems; normal waves 14,16,18,19,21,22,27,31,32 got denser.
 - Balance: 38/72 → 57/72 bot wins. Remaining deaths: Ember Pass / Spire Summit at wave 40 and the wave 9-10 early wall on those maps. Optimal-spend bots still clear Meadow/Caverns on Medium without leaking, so a real "too easy" fix needs a smarter bot or human playtests.
+
+## Tower cards (PR #22)
+- Each tile is now a card: big art, the tower's name (`.tn`, long names drop the epithet via `cardName()`), and the price as a badge in the top-left corner.
+- Phones held upright: `#tiles` is a 4-column grid where each group spans its tower count (`--n`), ordered Hero+Crowd / Single+Control / Support. Each group is a tinted panel with its name on top. Card height `--ch` is clamped to fit under the map (fits 393x713 and up; a 375x667 SE scrolls about 20px).
+- Desktop gets the same cards in its group rows (80px). Landscape phones keep the compact unnamed tiles because there's no height for names.
+- ui_test checks the cards are at least 75px wide, named, and that no label overflows.
