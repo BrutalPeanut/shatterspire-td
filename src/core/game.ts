@@ -45,7 +45,7 @@ export interface Fx { kind: 'ring' | 'line' | 'chain' | 'sweep' | 'text' | 'boom
 export interface Particle { x: number; y: number; vx: number; vy: number; t: number; max: number; color: string; size: number }
 
 export type GameEvent =
-  | { type: 'pop'; x: number; y: number; big: boolean }
+  | { type: 'pop'; x: number; y: number; big: boolean; kind: string }
   | { type: 'shoot'; kind: string; x: number }
   | { type: 'boom'; x: number }
   | { type: 'leak'; lives: number; name: string }
@@ -467,7 +467,7 @@ export class Game {
     this.stats.pops++;
     if (by?.isHero) by.xp += def.giant ? 5 : 0.3;
     const big = !!def.giant;
-    this.events.push({ type: 'pop', x: e.x, y: e.y, big });
+    this.events.push({ type: 'pop', x: e.x, y: e.y, big, kind: def.id });
     this.burst(e.x, e.y, def.color, big ? 24 : 5, big ? 4 : 2);
     if (def.boss) { this.events.push({ type: 'bossDown', name: def.name }); this.text(e.x, e.y - 40, `${def.name} falls!`, '#ffd23a'); }
     const kids = def.children;

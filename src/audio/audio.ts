@@ -8,7 +8,7 @@
 //
 // The score is calm between waves (soft pad, bass, harp arpeggio, an occasional flute phrase) and adds tuned taiko
 // drums, a shaker and a pulsing bass during combat.
-type Opt = { x?: number; vol?: number; at?: number };
+type Opt = { x?: number; vol?: number; at?: number; kind?: string };
 
 /** D minor pentatonic in semitones above D. */
 const PENTA = [0, 3, 5, 7, 10];
@@ -152,85 +152,158 @@ export class Audio {
     return true;
   }
 
+  // ---------------------------------------------------------------- foley building blocks (real-world sounds, not notes)
+  /** A creature's voice: a buzzy source through mouth formants, pitch sliding down like a cry or grunt. */
+  private voice(t: number, d: AudioNode, f0: number, f1: number, dur: number, formants: [number, number, number][], peak: number, breath = 0.15, a = 0.012, vib = 0) {
+    const ctx = this.ctx!; const j = 0.88 + Math.random() * 0.24;
+    const o = ctx.createOscillator(); o.type = 'sawtooth';
+    o.frequency.setValueAtTime(f0 * j, t); o.frequency.exponentialRampToValueAtTime(Math.max(25, f1 * j), t + dur);
+    if (vib) { const v = ctx.createOscillator(); const vg = ctx.createGain(); v.frequency.value = 6 + Math.random() * 3; vg.gain.value = f0 * vib; v.connect(vg); vg.connect(o.frequency); v.start(t); v.stop(t + dur + 0.05); }
+    const sum = ctx.createGain(); sum.gain.value = 1;
+    for (const [f, q, g] of formants) { const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = f * (0.95 + Math.random() * 0.1); bp.Q.value = q; const gg = ctx.createGain(); gg.gain.value = g; o.connect(bp); bp.connect(gg); gg.connect(sum); }
+    const env = ctx.createGain(); env.gain.setValueAtTime(0.0001, t); env.gain.exponentialRampToValueAtTime(peak, t + a); env.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    sum.connect(env); env.connect(d); o.start(t); o.stop(t + dur + 0.05);
+    if (breath) this.noiseHit(t, dur * 0.8, d, peak * breath, 'bandpass', formants[0][0] * 1.6, undefined, 1.2, a);
+  }
+  /** Random short noise grains: fire crackle, rubble, ice, sparks. */
+  private crackle(t: number, d: AudioNode, dur: number, n: number, f: number, peak: number, type: BiquadFilterType = 'bandpass') {
+    for (let i = 0; i < n; i++) { const at = t + Math.random() * dur; this.noiseHit(at, 0.008 + Math.random() * 0.025, d, peak * (0.4 + Math.random() * 0.6), type, f * (0.6 + Math.random() * 0.8), undefined, 1.5, 0.001); }
+  }
+  /** Struck metal: inharmonic partials of a plate/blade (real metal doesn't ring in tune). */
+  private metal(t: number, d: AudioNode, f: number, dur: number, peak: number) {
+    [[1, 1], [2.76, 0.6], [5.4, 0.4], [8.93, 0.25]].forEach(([m, g]) => this.osc('sine', f * m * (0.97 + Math.random() * 0.06), t, dur / (1 + m * 0.3), d, peak * g, 0.001));
+    this.noiseHit(t, 0.02, d, peak * 0.8, 'highpass', 4000, undefined, 0.7, 0.001);
+  }
+  /** Air moving: a bandpassed noise sweep (arrows, blades, flames, wings). */
+  private whoosh(t: number, d: AudioNode, dur: number, f0: number, f1: number, peak: number, q = 1.2) { this.noiseHit(t, dur, d, peak, 'bandpass', f0, f1, q, dur * 0.35); }
+  /** Body hitting the ground / heavy impact. */
+  private thud(t: number, d: AudioNode, f: number, peak: number, dur = 0.18) {
+    this.osc('sine', f, t, dur, d, peak, 0.002, f * 0.45);
+    this.noiseHit(t, dur * 0.7, d, peak * 0.5, 'lowpass', 700, 150, 0.7, 0.002);
+  }
+  private bubbles(t: number, d: AudioNode, n: number, peak: number) {
+    for (let i = 0; i < n; i++) { const at = t + Math.random() * 0.25; const f = 300 + Math.random() * 500; this.osc('sine', f, at, 0.04, d, peak, 0.002, f * 2.2); }
+  }
+
+  // ---------------------------------------------------------------- deaths, one per creature
+  private death(kind: string | undefined, t: number, d: AudioNode) {
+    const A: [number, number, number][] = [[700, 6, 1], [1150, 7, 0.7]]; // "ah"
+    const U: [number, number, number][] = [[450, 6, 1], [900, 7, 0.5]]; // "uh"
+    const E: [number, number, number][] = [[350, 6, 0.8], [2300, 8, 0.8]]; // "ee"
+    const O: [number, number, number][] = [[320, 5, 1], [750, 6, 0.6]]; // "oo"
+    switch (kind) {
+      case 'imp': this.voice(t, d, 1050, 600, 0.13, E, 0.5, 0.1, 0.006); this.noiseHit(t, 0.06, d, 0.25, 'bandpass', 1800, 600, 1); break;
+      case 'goblin': this.voice(t, d, 520, 300, 0.2, E, 0.55, 0.15, 0.008); this.thud(t + 0.05, d, 170, 0.12, 0.08); break;
+      case 'orc': this.voice(t, d, 170, 95, 0.24, A, 0.75, 0.25); this.thud(t + 0.06, d, 130, 0.22, 0.12); break;
+      case 'troll': this.voice(t, d, 120, 65, 0.34, U, 0.8, 0.3); this.thud(t + 0.1, d, 105, 0.3, 0.16); break;
+      case 'ogre': this.voice(t, d, 100, 52, 0.45, U, 0.85, 0.3, 0.02); this.thud(t + 0.15, d, 85, 0.4, 0.2); break;
+      case 'gloom': this.whoosh(t, d, 0.45, 1200, 250, 0.45, 3); this.voice(t, d, 380, 200, 0.4, O, 0.18, 0.6, 0.05, 0.03); break;
+      case 'frostling': this.crackle(t, d, 0.12, 9, 5000, 0.4, 'highpass'); [2600, 3900, 5200].forEach((f, i) => this.metal(t + i * 0.025, d, f, 0.18, 0.05)); break;
+      case 'hexling': this.whoosh(t, d, 0.25, 3500, 500, 0.4, 2); this.crackle(t, d, 0.2, 7, 6000, 0.25, 'highpass'); this.voice(t, d, 700, 350, 0.15, E, 0.25, 0.1); break;
+      case 'wraith': this.voice(t, d, 520, 230, 0.6, O, 0.35, 0.7, 0.08, 0.04); this.whoosh(t, d, 0.55, 900, 2400, 0.25, 2); break;
+      case 'iron': this.metal(t, d, 520, 0.35, 0.3); this.crackle(t + 0.04, d, 0.2, 6, 3000, 0.25); this.thud(t, d, 120, 0.35, 0.12); break;
+      case 'hydra': this.noiseHit(t, 0.4, d, 0.4, 'highpass', 3500, 5000, 0.8, 0.03); this.voice(t + 0.05, d, 140, 70, 0.35, U, 0.5, 0.2, 0.02, 0.15); break;
+      case 'golem': this.thud(t, d, 80, 0.8, 0.3); this.crackle(t, d, 0.5, 26, 600, 0.45, 'lowpass'); this.crackle(t + 0.05, d, 0.35, 10, 2200, 0.2); break;
+      case 'behemoth': this.thud(t, d, 60, 0.9, 0.4); this.crackle(t, d, 0.6, 24, 900, 0.4); this.metal(t + 0.05, d, 300, 0.4, 0.15); this.noiseHit(t, 0.5, d, 0.3, 'lowpass', 900, 100, 0.7); break;
+      case 'warbeast': this.voice(t, d, 260, 150, 0.7, A, 0.55, 0.3, 0.05, 0.02); this.thud(t + 0.35, d, 55, 0.95, 0.45); break;
+      case 'colossus': this.metal(t, d, 180, 0.8, 0.4); this.metal(t + 0.12, d, 260, 0.6, 0.25); this.thud(t, d, 55, 0.9, 0.5); this.crackle(t, d, 0.6, 18, 2500, 0.3); break;
+      case 'golemking': case 'lich': case 'dragon':
+        this.voice(t, d, kind === 'lich' ? 160 : 90, 40, 1.4, kind === 'lich' ? O : A, 0.9, 0.5, 0.06, 0.03);
+        this.thud(t + 0.4, d, 45, 1, 0.7); this.crackle(t + 0.3, d, 1.0, 40, 700, 0.45, 'lowpass'); this.noiseHit(t, 1.4, d, 0.35, 'lowpass', 1500, 80, 0.6, 0.1); break;
+      default: this.noiseHit(t, 0.06, d, 0.4, 'bandpass', 1500, 500, 1.2); this.thud(t, d, 160, 0.15, 0.06);
+    }
+  }
+
   // ---------------------------------------------------------------- sound events
   play(name: string, o: Opt = {}) {
     const ctx = this.ctx; if (!ctx || !this.sfxOn) return;
     const t = o.at ?? ctx.currentTime + 0.005;
     const vol = o.vol ?? 1;
     switch (name) {
-      case 'pop': { // a soft, percussive pop with a tiny in-key blip
-        if (!this.ok('pop', 45, t)) return; const d = this.out(o.x, 0.42 * vol);
-        this.noiseHit(t, 0.035, d, 0.4, 'bandpass', 1500 + Math.random() * 900, undefined, 1.4);
-        this.osc('sine', hz(pick([deg(20), deg(21), deg(22), deg(23)])), t, 0.05, d, 0.12, 0.002);
+      case 'pop': { if (!this.ok('pop', 55, t)) return; this.death(o.kind, t, this.out(o.x, 0.42 * vol)); break; }
+      case 'bigpop': { if (!this.ok('bigpop', 160, t)) return; this.death(o.kind, t, this.out(o.x, 0.85 * vol)); break; }
+      case 'bow': { // bowstring thrum + the arrow cutting air
+        if (!this.ok('bow', 70, t)) return; const d = this.out(o.x, 0.4 * vol);
+        this.pluck(38 + Math.floor(Math.random() * 4), t, d, 0.55, 500);
+        this.noiseHit(t, 0.012, d, 0.35, 'highpass', 3000, undefined, 0.7, 0.001);
+        this.whoosh(t + 0.015, d, 0.14, 3200, 900, 0.22, 1.5);
         break;
       }
-      case 'bigpop': { // a giant breaks: deep thump, crunch, a low in-key note
-        if (!this.ok('bigpop', 140, t)) return; const d = this.out(o.x, 0.9 * vol);
-        this.osc('sine', hz(deg(5)), t, 0.5, d, 0.7, 0.004, hz(deg(0)));
-        this.noiseHit(t, 0.4, d, 0.45, 'lowpass', 2400, 200, 0.7);
-        this.pluck(deg(5), t + 0.02, d, 0.35, 1200);
+      case 'thorn': { if (!this.ok('thorn', 80, t)) return; const d = this.out(o.x, 0.35 * vol); this.whoosh(t, d, 0.1, 2500, 1200, 0.3, 2); this.noiseHit(t, 0.015, d, 0.3, 'bandpass', 1800, undefined, 3, 0.001); break; }
+      case 'swing': { // a blade through the air, then steel ringing off armour
+        if (!this.ok('swing', 90, t)) return; const d = this.out(o.x, 0.42 * vol);
+        this.whoosh(t, d, 0.17, 500, 2800, 0.45, 1.3);
+        this.metal(t + 0.13, d, 1700 + Math.random() * 400, 0.28, 0.07);
         break;
       }
-      case 'bow': { // a tuned bowstring and a little air
-        if (!this.ok('bow', 70, t)) return; const d = this.out(o.x, 0.36 * vol);
-        this.pluck(pick([deg(5), deg(7), deg(8)]), t, d, 0.45, 1600);
-        this.noiseHit(t + 0.01, 0.1, d, 0.18, 'bandpass', 3000, 1000, 1);
+      case 'fire': { // fireball launch: a roar of flame and crackles
+        if (!this.ok('fire', 90, t)) return; const d = this.out(o.x, 0.45 * vol);
+        this.noiseHit(t, 0.35, d, 0.5, 'lowpass', 300, 2200, 0.9, 0.04);
+        this.crackle(t + 0.03, d, 0.3, 8, 2500, 0.18);
         break;
       }
-      case 'swing': { if (!this.ok('swing', 80, t)) return; const d = this.out(o.x, 0.38 * vol); this.noiseHit(t, 0.16, d, 0.4, 'bandpass', 700, 2600, 1.2, 0.035); break; }
-      case 'fire': { // whoomph
-        if (!this.ok('fire', 80, t)) return; const d = this.out(o.x, 0.42 * vol);
-        this.noiseHit(t, 0.32, d, 0.45, 'lowpass', 400, 2000, 0.9, 0.03);
-        this.osc('sine', hz(deg(3)), t, 0.22, d, 0.22, 0.02, hz(deg(0)));
+      case 'comet': { if (!this.ok('comet', 120, t)) return; const d = this.out(o.x, 0.5 * vol); this.whoosh(t, d, 0.45, 2500, 300, 0.4, 0.9); this.crackle(t + 0.1, d, 0.35, 10, 2000, 0.2); this.thud(t + 0.42, d, 70, 0.6, 0.25); break; }
+      case 'cannon': { // gunpowder crack, the boom, and the echo
+        if (!this.ok('cannon', 110, t)) return; const d = this.out(o.x, 0.7 * vol);
+        this.noiseHit(t, 0.03, d, 0.7, 'highpass', 1500, undefined, 0.7, 0.001);
+        this.osc('sine', 85, t, 0.35, d, 0.95, 0.002, 34);
+        this.noiseHit(t, 0.55, d, 0.5, 'lowpass', 1200, 90, 0.6, 0.004);
         break;
       }
-      case 'cannon': { // deep boom
-        if (!this.ok('cannon', 100, t)) return; const d = this.out(o.x, 0.65 * vol);
-        this.osc('sine', hz(deg(5)), t, 0.32, d, 0.85, 0.002, 42);
-        this.noiseHit(t, 0.22, d, 0.42, 'lowpass', 1600, 250);
+      case 'boom': { // explosion on the road: blast, rumble, falling debris
+        if (!this.ok('boom', 100, t)) return; const d = this.out(o.x, 0.6 * vol);
+        this.osc('sine', 70, t, 0.5, d, 0.9, 0.003, 28);
+        this.noiseHit(t, 0.6, d, 0.55, 'lowpass', 2000, 100, 0.6, 0.003);
+        this.crackle(t + 0.08, d, 0.45, 10, 1500, 0.18);
         break;
       }
-      case 'boom': { // explosion: sub thump and a rumble
-        if (!this.ok('boom', 90, t)) return; const d = this.out(o.x, 0.55 * vol);
-        this.osc('sine', hz(deg(2)), t, 0.45, d, 0.8, 0.003, 34);
-        this.noiseHit(t, 0.5, d, 0.45, 'lowpass', 1400, 120, 0.6);
+      case 'zap': { // lightning: electric crackle and a short thunder crack
+        if (!this.ok('zap', 90, t)) return; const d = this.out(o.x, 0.38 * vol);
+        this.crackle(t, d, 0.12, 14, 5000, 0.45, 'highpass');
+        const ctx2 = this.ctx!; const b = ctx2.createOscillator(); b.type = 'sawtooth'; b.frequency.value = 55 + Math.random() * 20; const bf = ctx2.createBiquadFilter(); bf.type = 'bandpass'; bf.frequency.value = 2400; bf.Q.value = 0.8; const bg = ctx2.createGain(); this.env(bg, t, 0.002, 0.25, 0.12); b.connect(bf); bf.connect(bg); bg.connect(d); b.start(t); b.stop(t + 0.16);
+        this.noiseHit(t + 0.03, 0.3, d, 0.3, 'lowpass', 1500, 120, 0.6, 0.002);
         break;
       }
-      case 'zap': { // crackle (unpitched)
-        if (!this.ok('zap', 90, t)) return; const d = this.out(o.x, 0.32 * vol);
-        for (let i = 0; i < 3; i++) this.noiseHit(t + i * 0.022, 0.035, d, 0.32, 'highpass', 3500 + Math.random() * 1500, undefined, 0.9);
-        this.chime(deg(23), t, 0.08, d, 0.05);
+      case 'ballista': { // wooden arms snapping forward, the bolt whooshing out
+        if (!this.ok('ballista', 110, t)) return; const d = this.out(o.x, 0.6 * vol);
+        this.noiseHit(t, 0.05, d, 0.6, 'bandpass', 700, 300, 2.5, 0.001);
+        this.thud(t, d, 90, 0.5, 0.12);
+        this.pluck(26, t + 0.005, d, 0.45, 350);
+        this.whoosh(t + 0.02, d, 0.2, 1800, 500, 0.3, 1.2);
         break;
       }
-      case 'ballista': { // heavy thunk
-        if (!this.ok('ballista', 100, t)) return; const d = this.out(o.x, 0.55 * vol);
-        this.pluck(deg(3), t, d, 0.6, 800);
-        this.osc('sine', hz(deg(5)), t, 0.14, d, 0.5, 0.002, 60);
-        this.noiseHit(t + 0.02, 0.16, d, 0.14, 'bandpass', 2500, 1200, 1.5);
+      case 'frost': { // icy blast: cold wind, ice crackling, shards
+        if (!this.ok('frost', 130, t)) return; const d = this.out(o.x, 0.35 * vol);
+        this.whoosh(t, d, 0.35, 5000, 2000, 0.25, 0.8);
+        this.crackle(t + 0.04, d, 0.25, 12, 6000, 0.35, 'highpass');
+        this.metal(t + 0.1, d, 3100 + Math.random() * 800, 0.15, 0.04);
         break;
       }
-      case 'frost': { // icy chimes
-        if (!this.ok('frost', 130, t)) return; const d = this.out(o.x, 0.3 * vol);
-        [deg(23), deg(25), deg(28)].forEach((m, i) => this.chime(m, t + i * 0.035, 0.45, d, 0.09));
-        this.noiseHit(t, 0.3, d, 0.12, 'highpass', 6000, 3500, 0.7, 0.05);
+      case 'potion': { // a glass flask: thrown, smashes, fizzes
+        if (!this.ok('potion', 110, t)) return; const d = this.out(o.x, 0.4 * vol);
+        this.whoosh(t, d, 0.12, 1500, 700, 0.15, 1.5);
+        this.metal(t + 0.12, d, 2300 + Math.random() * 500, 0.1, 0.12);
+        this.crackle(t + 0.12, d, 0.08, 8, 4500, 0.3, 'highpass');
+        this.bubbles(t + 0.16, d, 5, 0.06);
+        this.noiseHit(t + 0.15, 0.35, d, 0.08, 'highpass', 6000, undefined, 0.7, 0.03);
         break;
       }
-      case 'potion': { if (!this.ok('potion', 110, t)) return; const d = this.out(o.x, 0.36 * vol); this.chime(deg(17), t, 0.12, d, 0.18); this.chime(deg(19), t + 0.07, 0.16, d, 0.16); this.noiseHit(t + 0.08, 0.15, d, 0.12, 'bandpass', 1400, 500, 1.5); break; }
-      case 'whip': { if (!this.ok('whip', 100, t)) return; const d = this.out(o.x, 0.36 * vol); this.noiseHit(t, 0.11, d, 0.4, 'bandpass', 1000, 4500, 1.6, 0.02); break; }
-      case 'place': { // wooden thunk + one chime
+      case 'whip': { if (!this.ok('whip', 100, t)) return; const d = this.out(o.x, 0.4 * vol); this.whoosh(t, d, 0.1, 600, 3500, 0.35, 1.5); this.noiseHit(t + 0.09, 0.02, d, 0.6, 'highpass', 2500, undefined, 0.7, 0.001); break; }
+      case 'place': { // stonework set down on the ground
         const d = this.out(o.x, 0.75);
-        this.osc('sine', hz(deg(8)), t, 0.16, d, 0.7, 0.002, hz(deg(3)));
-        this.noiseHit(t, 0.06, d, 0.3, 'bandpass', 900, 450, 1.8);
-        this.chime(deg(18), t + 0.05, 0.6, d, 0.14);
+        this.thud(t, d, 110, 0.75, 0.16);
+        this.crackle(t + 0.01, d, 0.18, 10, 1100, 0.25);
+        this.noiseHit(t, 0.03, d, 0.3, 'bandpass', 1200, undefined, 2, 0.001);
         break;
       }
-      case 'upgrade': { // rising pentatonic sparkle
-        const d = this.out(o.x, 0.65);
-        [15, 16, 18, 19, 20].forEach((s, i) => this.chime(deg(s), t + i * 0.055, 0.7, d, 0.14));
+      case 'upgrade': { // hammer on the anvil, twice, then a magic shimmer
+        const d = this.out(o.x, 0.6);
+        this.metal(t, d, 820, 0.45, 0.18); this.metal(t + 0.16, d, 860, 0.5, 0.2);
+        [18, 20, 23].forEach((s, i) => this.chime(deg(s), t + 0.3 + i * 0.05, 0.5, d, 0.07));
         break;
       }
-      case 'sell': { const d = this.out(o.x, 0.55); [20, 18, 16].forEach((s, i) => this.chime(deg(s), t + i * 0.06, 0.45, d, 0.13)); break; }
-      case 'coin': { if (!this.ok('coin', 70, t)) return; const d = this.out(o.x, 0.45); this.chime(deg(23), t, 0.3, d, 0.15); this.chime(deg(25), t + 0.06, 0.4, d, 0.13); break; }
+      case 'sell': { const d = this.out(o.x, 0.55); for (let i = 0; i < 6; i++) this.metal(t + i * 0.04 + Math.random() * 0.02, d, 3000 + Math.random() * 1500, 0.15, 0.06); this.thud(t, d, 150, 0.2, 0.08); break; }
+      case 'coin': { if (!this.ok('coin', 70, t)) return; const d = this.out(o.x, 0.45); this.metal(t, d, 3600, 0.22, 0.09); this.metal(t + 0.05, d, 4300, 0.25, 0.07); break; }
       case 'leak': { // a low, sombre hit (D and A together: grim, not sour)
         if (!this.ok('leak', 240, t)) return; const d = this.out(undefined, 0.75);
         this.osc('sine', hz(deg(0)), t, 0.6, d, 0.7, 0.01);
