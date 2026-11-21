@@ -825,7 +825,7 @@ coach.addEventListener('click', (ev) => {
 });
 
 // ================================================================ events
-const SHOT_SOUND: Record<string, string> = { arrow: 'bow', firearrow: 'bow', thorn: 'bow', shard: 'bow', star: 'fire', fireball: 'fire', comet: 'fire', bomb: 'cannon', bolt: 'zap', ballista: 'ballista', sweep: 'swing', frost: 'frost', potion: 'potion', vine: 'whip' };
+const SHOT_SOUND: Record<string, string> = { arrow: 'bow', firearrow: 'bow', thorn: 'thorn', shard: 'frost', star: 'fire', fireball: 'fire', comet: 'comet', firewall: 'fire', bomb: 'cannon', bolt: 'zap', ballista: 'ballista', sweep: 'swing', frost: 'frost', potion: 'potion', vine: 'whip' };
 const leakAgg: Record<string, { n: number; lives: number }> = {};
 let leakTimer = 0;
 /** One ribbon per burst of leaks: "Leaked: 3 Ogres, 1 Troll (−19 lives)". */
@@ -845,7 +845,7 @@ function handleEvents() {
   const g = game;
   for (const e of g.events) {
     switch (e.type) {
-      case 'pop': audio.play(e.big ? 'bigpop' : 'pop', { x: e.x }); break;
+      case 'pop': audio.play(e.big ? 'bigpop' : 'pop', { x: e.x, kind: e.kind }); break;
       case 'shoot': audio.play(SHOT_SOUND[e.kind] ?? 'bow', { x: e.x }); break;
       case 'boom': audio.play('boom', { x: e.x }); break;
       case 'leak': audio.play('leak'); { const l = (leakAgg[e.name] ??= { n: 0, lives: 0 }); l.n++; l.lives += e.lives; if (!leakTimer) leakTimer = window.setTimeout(flushLeaks, 700); } break;

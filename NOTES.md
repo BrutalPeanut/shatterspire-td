@@ -236,3 +236,10 @@ The battle screen was rebuilt map-first. Menus, setup, modals and the recap were
 - Phones held upright: `#tiles` is a 4-column grid where each group spans its tower count (`--n`), ordered Hero+Crowd / Single+Control / Support. Each group is a tinted panel with its name on top. Card height `--ch` is clamped to fit under the map (fits 393x713 and up; a 375x667 SE scrolls about 20px).
 - Desktop gets the same cards in its group rows (80px). Landscape phones keep the compact unnamed tiles because there's no height for names.
 - ui_test checks the cards are at least 75px wide, named, and that no label overflows.
+
+## Foley (PR #23)
+- Brian: deaths sounded like instruments; towers must sound like what they are. Gameplay sounds are now physical foley, not notes. Music, UI stingers and the upgrade shimmer stay in the pentatonic scale.
+- Building blocks in `src/audio/audio.ts`: `voice()` (saw through mouth formants, sliding pitch = cries/grunts), `crackle()` (noise grains: fire, rubble, ice), `metal()` (inharmonic partials: blades, armour, coins, glass), `whoosh()`, `thud()`, `bubbles()`.
+- Deaths by enemy id via `death(kind)`; the `pop` event now carries `kind`. Imp squeak, goblin eek, orc/troll/ogre grunts and groans, gloom/wraith ghostly wails, frostling ice shatter, hexling magic poof, ironclad armour clang, hydra hiss, golem rock crumble, behemoth siege crash, war mammoth trumpet, colossus metal crash, bosses roar and collapse.
+- Towers: bow = string thrum + arrow whoosh, thorn thwip, knight = blade whoosh + steel ring, fire roar/crackle, comet whoosh and impact, cannon crack/boom/echo, lightning crackle + thunder, ballista wooden snap + bolt, frost wind + ice crackle, potion flask throw/smash/fizz, vine whip crack. Placing = stonework thud, upgrade = anvil hits, coins clink.
+- No recorded samples: kenney.nl / opengameart / freesound are blocked from the sandbox and add_repo can't attach the Kenney GitHub mirrors. If Brian wants recorded CC0 foley, download Kenney "RPG Audio" + "Impact Sounds" on his desktop (with his OK) and wire them in.
