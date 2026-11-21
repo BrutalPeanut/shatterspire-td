@@ -133,6 +133,19 @@ Owner wants an epic, grounded high-fantasy look for adults 18-45 (see the brief 
 - **Test links:** `?unlockall` unlocks everything; `?fresh` erases the saved profile for a true first-run test (it cleans itself out of the URL so a refresh does not erase again). They combine.
 - **Still to do from the 18-45 restyle brief:** muted palette, serif UI type (drop Lilita One), lean realistic proportions, original orchestral ambience, menus restyled; fix boss banners over the map, portrait ability-strip overflow, unreadable medallion labels, locked-vs-unaffordable tile states, "Layers" jargon, and the difficulty cliff at boss waves (bot: Medium flawless, Hard loses 66-142 lives in wave 30 alone).
 
+## Bloons-style drag and drop (2026-11-20, PR #20)
+
+Owner: "rebuild how the user interacts with the app. It's not smooth. It should be easy click and drag like bloons."
+
+- **Drag:** press a tower card (it sinks, `.press`), move 7px (touch) / 4px (mouse) and the tower lifts into a floating avatar (`#dragAv`) that follows the pointer over the panels (lifted 42px above a finger). Over the map the avatar fades out and the canvas ghost takes over (range circle, red X and red range on bad spots; the info box says why). Release on a good spot builds (ring pop, sound, vibration). Release on a bad spot or off the map: the tower flies back to its card and the reason shows. **It is never left in your hand**, so a later stray tap cannot build it (old behaviour; test updated).
+- **Tap a card** = carry it: mouse users see the tower follow the cursor until they click the map (Esc / right-click / tapping the card again puts it back); on touch, the next press on the map shows the preview under the finger and builds on release.
+- **No more "drag interrupted":** cards and spell buttons are `touch-action: none`. On a side rail (landscape/desktop) a mostly vertical touch swipe scrolls the tower list by hand, with momentum (`fling`).
+- **Spells:** targeted spells (Meteor) can be dragged from their button onto the map; a tap still arms them for the next tap.
+- **Towers on the map:** bigger touch hit area (radius + 16), tap the open tower again to close its panel, desktop hover ring and pointer cursor (`Overlay.hover`).
+- **Vibration** on pick-up, build, bad drop and spell cast (Settings > Vibration, `profile.settings.haptics`, only shown where the browser supports it).
+- **Performance:** the frame loop no longer reads layout every frame (the list-overflow check runs twice a second; cost classes and the stat line update only when they change). Measured on a wave with 14 towers and the panel open: layouts per 3 s 197 -> 15, layout time 36 -> 6 ms (desktop CPU; more on phones).
+- Tests: new "drag and drop" section in `test/ui_test.py` (vertical swipe scrolls, avatar follows, preview takes over, drop builds, tap-again closes, drag Meteor casts, mouse carry, Esc puts back).
+
 ## Modern UI rework (2026-11-20, PR #19) -- READ THIS BEFORE TOUCHING CSS
 
 Owner: "The ui just still feels so non-modern. Do a full rework on it and base it on modern successful games."

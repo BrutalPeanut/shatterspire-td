@@ -11,7 +11,7 @@ export interface Profile {
   medals: Record<string, Partial<Record<Difficulty | 'freeplay', number>>>; // value = 1 for medal, freeplay = best round
   perks: string[];
   powers: Record<string, number>;
-  settings: { sfx: boolean; music: boolean; autoStart: boolean; sfxVol: number; musicVol: number; quality: 'high' | 'low'; advisor: boolean };
+  settings: { sfx: boolean; music: boolean; autoStart: boolean; sfxVol: number; musicVol: number; quality: 'high' | 'low'; advisor: boolean; haptics?: boolean };
   /** Shard wallet and vault (see core/vault.ts). vaultSince = when the vault last started filling (ms). */
   shards: number; vaultLevel: number; vaultSince: number;
   /** First-run tutorial finished or dismissed. */

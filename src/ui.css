@@ -111,7 +111,7 @@ button { font: inherit; color: inherit; border: 0; cursor: pointer; background: 
 .grp-g { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-auto-rows: var(--th); gap: 7px; }
 
 /* tower cards: art on a dark card, a stripe in the group colour, the price underneath */
-.tile { position: relative; min-width: 0; padding: 0; border-radius: 14px; overflow: hidden; cursor: grab; touch-action: pan-y; user-select: none; -webkit-user-select: none; display: flex; align-items: flex-end;
+.tile { position: relative; min-width: 0; padding: 0; border-radius: 14px; overflow: hidden; cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none; display: flex; align-items: flex-end;
   background: linear-gradient(180deg, color-mix(in srgb, var(--gc) 16%, var(--card-2)), var(--card)); box-shadow: inset 0 0 0 1px var(--line), 0 4px 12px rgba(0, 0, 0, 0.22);
   transition: transform 0.14s var(--ease), box-shadow 0.15s, background-color 0.15s; }
 .tile::before { content: ''; position: absolute; left: 0; right: 0; top: 0; height: 3px; background: var(--gc); opacity: 0.9; }
@@ -131,6 +131,17 @@ button { font: inherit; color: inherit; border: 0; cursor: pointer; background: 
 .tile.tut-pulse, .tut-pulse { animation: pulse 1.2s infinite; position: relative; z-index: 1; }
 @keyframes pulse { 50% { box-shadow: inset 0 0 0 2px var(--accent), 0 0 0 4px rgba(245, 185, 66, 0.35), 0 0 24px rgba(245, 185, 66, 0.6); } }
 body.dragging, body.dragging * { cursor: grabbing !important; }
+/* pressed: the card sinks a little the moment you touch it; lifted: its tower is in your hand */
+.tile.press { transform: scale(0.94); }
+.tile.lifted { transform: none; opacity: 0.45; box-shadow: inset 0 0 0 1.5px var(--accent); }
+/* the tower in your hand: follows the pointer over the panels, gives way to the map preview over the map */
+#dragAv { position: fixed; left: 0; top: 0; z-index: 50; display: none; width: 74px; height: 74px; place-items: center; border-radius: 50%; pointer-events: none; will-change: transform;
+  background: radial-gradient(circle at 50% 45%, rgba(245, 185, 66, 0.28), rgba(14, 18, 26, 0.78) 68%); box-shadow: inset 0 0 0 1.5px rgba(245, 185, 66, 0.7), 0 14px 30px rgba(0, 0, 0, 0.5); transition: opacity 0.1s; }
+#dragAv.on { display: grid; }
+#dragAv img { width: 60px; height: 60px; filter: drop-shadow(0 6px 6px rgba(0, 0, 0, 0.5)); animation: avPop 0.2s var(--spring); }
+@keyframes avPop { from { transform: scale(0.6); } }
+#dragAv.over { opacity: 0; }
+#dragAv.back { opacity: 0; }
 
 /* ---- info box at the top of the rail: next wave, or what you're placing / hovering */
 #slotw { position: relative; flex: none; }
@@ -192,7 +203,7 @@ body.dragging, body.dragging * { cursor: grabbing !important; }
 
 /* ---- spells and abilities: round glass buttons at the map's bottom-left */
 #abil { position: absolute; left: 12px; bottom: 12px; z-index: 3; display: flex; gap: 8px; align-items: flex-end; pointer-events: none; }
-.abw { pointer-events: auto; display: flex; flex-direction: column; align-items: center; gap: 5px; width: 64px; }
+.abw { pointer-events: auto; touch-action: none; display: flex; flex-direction: column; align-items: center; gap: 5px; width: 64px; }
 .ab { position: relative; width: 54px; height: 54px; border-radius: 50%; display: grid; place-items: center; overflow: hidden; color: var(--text);
   background: var(--glass); -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur); box-shadow: inset 0 0 0 1.5px var(--line-2), 0 8px 18px rgba(0, 0, 0, 0.35); transition: transform 0.14s var(--ease), box-shadow 0.2s; }
 .abw:active .ab { transform: scale(0.93); }
@@ -281,6 +292,9 @@ button.ug:active { transform: scale(0.97); }
   .tile.rec::after { width: 15px; height: 15px; font-size: 9px; top: 5px; right: 3px; }
   #slot { height: 62px; } .sl { padding: 6px 9px; gap: 2px; font-size: 11px; } .sl b { font-size: 12.5px; }
   .sl-place .sl-l, .sl-info .sl-g { display: none; } .sl-b button { height: 22px; font-size: 11px; padding: 0 7px; }
+  .sl-place { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: auto auto; column-gap: 6px; align-content: center; }
+  .sl-place b { grid-column: 1; grid-row: 1; } .sl-place .sl-u { grid-column: 1; grid-row: 2; } .sl-place .sl-b { grid-column: 2; grid-row: 1 / span 2; flex-direction: column; gap: 4px; margin: 0; }
+  .sl-place .sl-b button { height: 24px; padding: 0 8px; }
   .cc { padding: 7px 9px; gap: 5px; } .cc-t b { font-size: 12px; } .cc-t span { font-size: 11px; } .cc-b button { height: 24px; font-size: 11px; padding: 0 10px; } .cc-n { top: 6px; right: 6px; font-size: 9.5px; }
   #ctrl { padding: 6px 8px 8px; gap: 6px; }
   #ctrl #autoBtn, #ctrl #speedBtn { width: 40px; height: 40px; font-size: 9px; gap: 1px; } #ctrl #autoBtn .ico, #ctrl #speedBtn .ico { width: 15px; height: 15px; }
@@ -322,7 +336,7 @@ button.ug:active { transform: scale(0.97); }
   .grp-h span, .grp-h .ico { display: none; }
   .grp-g { grid-template-columns: repeat(3, var(--th)); gap: 5px; }
   .grp-tip { display: block; justify-self: end; padding-right: 6px; font-size: 11px; font-weight: 500; font-style: normal; line-height: 1.2; text-align: right; color: var(--text-3); }
-  .tile { touch-action: none; border-radius: 11px; } .tile::before { height: 2px; }
+  .tile { border-radius: 11px; } .tile::before { height: 2px; }
   .tc { font-size: 11px; padding: 1px 0 3px; gap: 2px; } .tc .ico { width: 10px; height: 10px; } .tc.lk { font-size: 8.5px; }
   .tile img { top: 1%; }
   .tile.deployed .tc { font-size: 8px; letter-spacing: -0.02em; }
@@ -333,6 +347,10 @@ button.ug:active { transform: scale(0.97); }
   .cc-t { flex: 1; min-width: 0; padding-right: 0; gap: 1px; } .cc-t b { font-size: 13px; } .cc-t span { font-size: 11.5px; line-height: 1.3; }
   .cc-b button { height: 28px; padding: 0 11px; font-size: 12px; }
   #slot { height: 50px; } .sl { padding: 5px 10px; gap: 2px; } .sl b { font-size: 13px; } .sl-u { font-size: 11px; } .sl-c { height: 16px; } .sl-c .chip { font-size: 9px; padding: 2px 6px; }
+  /* placing / aiming: name and status on the left, the buttons on the right, all in the 50px box */
+  .sl-place { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: auto auto; column-gap: 8px; align-content: center; }
+  .sl-place b { grid-column: 1; grid-row: 1; } .sl-place .sl-u { grid-column: 1; grid-row: 2; } .sl-place .sl-l { display: none; }
+  .sl-place .sl-b { grid-column: 2; grid-row: 1 / span 2; align-self: center; margin: 0; } .sl-place .sl-b button { height: 32px; }
   .toast { font-size: 12.5px; }
   /* bottom sheet */
   #tpanel { grid-area: rail; justify-self: stretch; align-self: stretch; max-height: none; z-index: 7; width: auto; margin: 0; border-radius: var(--r-lg) var(--r-lg) 0 0; padding: 14px 10px calc(8px + env(safe-area-inset-bottom)); gap: 6px; overflow-y: auto; background: #151a25; -webkit-backdrop-filter: none; backdrop-filter: none; box-shadow: inset 0 1px 0 var(--line-2), 0 -10px 30px rgba(0, 0, 0, 0.4); }

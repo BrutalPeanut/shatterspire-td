@@ -8,6 +8,8 @@ import { drawAmbient, drawSpire, exitPoint, paintMap } from './mapArt';
 import { drawEnemyModel, enemyHeight } from './enemyArt';
 
 export interface Overlay {
+  /** Tower under the mouse (desktop): a faint ring says "click me". */
+  hover?: Tower | null;
   ghost?: { defId: string; x: number; y: number; valid: boolean; radius: number; range: number; reason?: string | null; deploy?: { x: number; y: number } | null };
   /** Tutorial: a suggested build spot (pulsing ring on the grass). */
   hint?: { x: number; y: number } | null;
@@ -81,6 +83,7 @@ export class Renderer {
 
     // range of selected / ghost
     if (ov.selected) this.rangeCircle(ov.selected.x, ov.selected.y, this.displayRange(ov.selected), 'rgba(255,255,255,0.14)', 'rgba(255,255,255,0.6)');
+    if (ov.hover && ov.hover !== ov.selected) { c.strokeStyle = 'rgba(255,255,255,0.55)'; c.lineWidth = 2; c.beginPath(); c.arc(ov.hover.x, ov.hover.y, ov.hover.radius + 7, 0, TAU); c.stroke(); }
 
     // enemies (big first so small draw on top)
     const es = g.enemies.slice().sort((a, b) => a.y - b.y);

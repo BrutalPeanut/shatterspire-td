@@ -124,11 +124,12 @@ function updateGhost(p: { x: number; y: number }) { if (game && placing) ghost =
 function tryPlace(keep = false): boolean {
   if (!game || !placing || !ghost) return false;
   const err = game.placeError(placing, ghost.x, ghost.y);
-  if (err) { audio.play('error'); flashSlot(); return false; }
+  if (err) { audio.play('error'); haptic([10, 40, 10]); flashSlot(); return false; }
   const id = placing;
   const t = game.placeTower(id, ghost.x, ghost.y);
   if (!t) { audio.play('error'); flashSlot(); return false; }
-  audio.play('place');
+  audio.play('place'); haptic(14);
+  game.fx.push({ kind: 'ring', x: t.x, y: t.y, r: (t.isHero ? game.heroDef.radius : TOWER_MAP[t.defId].radius) * 2.4, t: 0, max: 0.35, color: 'rgba(255,226,122,0.95)' });
   tut('placed');
   // keep building copies when Shift is held (desktop) — never for the one-off hero
   if (keep && id !== 'hero' && game.gold >= game.towerCost(id)) { ghost = makeGhost(id, ghost); return true; }
@@ -136,9 +137,57 @@ function tryPlace(keep = false): boolean {
   return true;
 }
 
-// Drag a tower straight from the Armory onto the map. The card captures the pointer so the gesture survives
-// leaving the panel; a "jump" drag (press on the card, release over the map with no moves in between) also builds.
-let drag: { id: string; x: number; y: number; active: boolean; pid: number; el: HTMLElement } | null = null;
+// ================================================================ drag & drop
+// Press a tower card and drag: a copy of the tower lifts off the card and follows the pointer; over the map it becomes
+// the real placement preview (range circle, red X where it can't go). Release on a good spot to build. Release anywhere
+// else, or on a bad spot, and it flies back to its card with the reason shown. Tap a card instead to carry it, then tap
+// the map. Cards use touch-action: none so the browser never steals a drag; on a side rail a mostly vertical swipe
+// scrolls the list instead (handled here, with a little momentum).
+type Drag = { id: string; x: number; y: number; pid: number; el: HTMLElement; mode: 'pending' | 'drag' | 'scroll'; scroll0: number; vy: number; lt: number; ly: number };
+let drag: Drag | null = null;
+const avatar = document.createElement('div');
+avatar.id = 'dragAv';
+document.body.appendChild(avatar);
+const dragStartPx = (ev: PointerEvent) => (ev.pointerType === 'mouse' ? 4 : 7);
+function haptic(p: number | number[]) { if (profile.settings.haptics === false) return; try { navigator.vibrate?.(p); } catch { /* unsupported */ } }
+/** True when the tower rail is beside the map (landscape/desktop), so vertical swipes on it mean "scroll". */
+function railIsSide() { return !matchMedia('(orientation: portrait)').matches; }
+function showAvatar(id: string, ev: PointerEvent) {
+  const isHero = id === 'hero';
+  avatar.innerHTML = img(isHero ? game!.heroDef.id : id, isHero, 64);
+  avatar.className = 'on';
+  avatar.style.transition = 'none';
+  moveAvatar(ev);
+}
+function moveAvatar(ev: { clientX: number; clientY: number; pointerType?: string }) {
+  const lift = ev.pointerType && ev.pointerType !== 'mouse' ? TOUCH_LIFT : 0;
+  avatar.style.transform = `translate3d(${ev.clientX}px, ${ev.clientY - lift}px, 0) translate(-50%, -50%)`;
+}
+function hideAvatar() { avatar.className = ''; avatar.innerHTML = ''; }
+/** The dragged tower flies back to its card. */
+function flyBack(card: HTMLElement | null) {
+  if (!avatar.classList.contains('on')) return;
+  const r = card?.getBoundingClientRect();
+  avatar.classList.remove('over');
+  avatar.style.transition = 'transform .2s cubic-bezier(.2,.9,.3,1), opacity .2s';
+  if (r && r.width) avatar.style.transform = `translate3d(${r.left + r.width / 2}px, ${r.top + r.height / 2}px, 0) translate(-50%, -50%) scale(.55)`;
+  avatar.classList.add('back');
+  window.setTimeout(() => { if (avatar.classList.contains('back')) hideAvatar(); }, 220);
+}
+function startDrag(ev: PointerEvent) {
+  if (!drag || !game) return;
+  drag.mode = 'drag';
+  hideTip(); select(null); cancelSpells(); placing = drag.id; ghost = undefined;
+  document.body.classList.add('dragging');
+  drag.el.classList.add('lifted');
+  showAvatar(drag.id, ev);
+  haptic(8);
+}
+function endDrag(d: Drag) {
+  document.body.classList.remove('dragging');
+  d.el.classList.remove('press', 'lifted');
+  try { d.el.releasePointerCapture(d.pid); } catch { /* ignore */ }
+}
 document.addEventListener('pointerdown', (ev) => {
   const card = (ev.target as HTMLElement).closest('[data-a="buy"]') as HTMLElement | null;
   if (!card || !game) return;
@@ -147,35 +196,57 @@ document.addEventListener('pointerdown', (ev) => {
   if (card.classList.contains('locked')) { audio.play('click'); towerInfoModal(card.dataset.v!, false, card.dataset.lock); return; }
   if (card.classList.contains('deployed')) { const h = game.towers.find((t) => t.isHero); if (h) select(h); return; }
   try { card.setPointerCapture(ev.pointerId); } catch { /* not capturable (synthetic events) */ }
-  drag = { id: card.dataset.v!, x: ev.clientX, y: ev.clientY, active: false, pid: ev.pointerId, el: card };
+  card.classList.add('press');
+  drag = { id: card.dataset.v!, x: ev.clientX, y: ev.clientY, pid: ev.pointerId, el: card, mode: 'pending', scroll0: sbody.scrollTop, vy: 0, lt: performance.now(), ly: ev.clientY };
 });
-function activateDrag() {
-  if (!drag || !game) return;
-  drag.active = true; hideTip(); select(null); cancelSpells(); placing = drag.id; ghost = undefined;
-  document.body.classList.add('dragging');
-}
 window.addEventListener('pointermove', (ev) => {
-  if (!drag || !game || ev.pointerId !== drag.pid) return;
-  if (!drag.active && Math.hypot(ev.clientX - drag.x, ev.clientY - drag.y) > 8) activateDrag();
-  if (drag.active) { if (dropOnMap(ev)) { updateGhost(toWorld(ev, true)); cursor = ghost ? { x: ghost.x, y: ghost.y } : null; } else ghost = undefined; }
+  if (!drag || !game || ev.pointerId !== drag.pid) {
+    // carrying a tower after a click (mouse): it follows the cursor everywhere, like picking it up
+    if (!drag && placing && ev.pointerType === 'mouse' && game) { if (!avatar.classList.contains('on')) showAvatar(placing, ev); moveAvatar(ev); avatar.classList.toggle('over', ev.target === canvas); }
+    return;
+  }
+  const dx = ev.clientX - drag.x, dy = ev.clientY - drag.y;
+  if (drag.mode === 'pending') {
+    if (Math.hypot(dx, dy) < dragStartPx(ev)) return;
+    if (ev.pointerType !== 'mouse' && railIsSide() && Math.abs(dy) > Math.abs(dx) * 1.3 && sbody.scrollHeight > sbody.clientHeight + 2) { drag.mode = 'scroll'; drag.el.classList.remove('press'); }
+    else startDrag(ev);
+  }
+  if (drag.mode === 'scroll') {
+    const now = performance.now();
+    drag.vy = (ev.clientY - drag.ly) / Math.max(1, now - drag.lt); drag.lt = now; drag.ly = ev.clientY;
+    sbody.scrollTop = drag.scroll0 - dy;
+    return;
+  }
+  moveAvatar(ev);
+  if (dropOnMap(ev)) { updateGhost(toWorld(ev, true)); cursor = ghost ? { x: ghost.x, y: ghost.y } : null; avatar.classList.add('over'); }
+  else { ghost = undefined; avatar.classList.remove('over'); }
 });
+function fling(v: number) {
+  let last = performance.now();
+  const step = (now: number) => { const dt = now - last; last = now; sbody.scrollTop -= v * dt; v *= Math.pow(0.94, dt / 16); if (Math.abs(v) > 0.02) requestAnimationFrame(step); };
+  if (Math.abs(v) > 0.1) requestAnimationFrame(step);
+}
 window.addEventListener('pointerup', (ev) => {
   if (!drag || !game || ev.pointerId !== drag.pid) return;
   const d = drag; drag = null;
-  document.body.classList.remove('dragging');
-  try { d.el.releasePointerCapture(ev.pointerId); } catch { /* ignore */ }
-  const moved = Math.hypot(ev.clientX - d.x, ev.clientY - d.y) > 8;
-  if (!d.active && !moved) { beginPlacing(d.id); return; } // simple tap: tap-to-place mode
-  if (!d.active) activateDrag();
-  // an invalid drop keeps the tower in hand (tap mode) so the reason stays visible and you can tap a better spot
-  if (dropOnMap(ev)) { updateGhost(toWorld(ev, true)); tryPlace(ev.shiftKey); }
-  else cancelPlacing();
+  endDrag(d);
+  if (d.mode === 'scroll') { fling(d.vy); return; }
+  const moved = Math.hypot(ev.clientX - d.x, ev.clientY - d.y) >= dragStartPx(ev);
+  if (d.mode === 'pending' && !moved) { beginPlacing(d.id); return; } // a tap: carry it, then tap the map
+  if (d.mode === 'pending') { drag = d; startDrag(ev); drag = null; } // "jump" drag: pressed, released elsewhere, no moves in between
+  if (dropOnMap(ev)) {
+    updateGhost(toWorld(ev, true));
+    if (ghost?.valid && tryPlace(ev.shiftKey)) { if (!placing) hideAvatar(); else avatar.classList.add('over'); return; }
+    // a bad spot: the tower goes back to its card and the reason shows, so a stray tap can never build it later
+    toast(ghost?.reason ?? 'Can\'t build here', 'bad'); audio.play('error'); haptic([10, 40, 10]);
+  }
+  flyBack(d.el); cancelPlacing();
 });
 window.addEventListener('pointercancel', (ev) => {
   if (!drag || ev.pointerId !== drag.pid) return;
-  const was = drag.active; drag = null;
-  document.body.classList.remove('dragging');
-  if (was) { cancelPlacing(); toast('Drag interrupted: tap a tower, then tap the map', 'bad'); }
+  const d = drag; drag = null;
+  endDrag(d);
+  if (d.mode === 'drag') { flyBack(d.el); cancelPlacing(); }
 });
 
 // ================================================================ input on field
@@ -189,9 +260,13 @@ canvas.addEventListener('pointerdown', (ev) => {
   if (placing) updateGhost(cursor);
 });
 canvas.addEventListener('pointermove', (ev) => {
-  if (!game || drag) return;
+  if (!game || drag || spellDrag?.active) return;
   cursor = toWorld(ev);
   if (placing && (pointerDown || ev.pointerType === 'mouse')) updateGhost(cursor);
+  if (ev.pointerType === 'mouse' && !placing && !armedSpell && !rallyEdit) {
+    hover = towerAt(cursor, 8);
+    canvas.style.cursor = hover ? 'pointer' : '';
+  } else if (hover) { hover = null; canvas.style.cursor = ''; }
 });
 canvas.addEventListener('pointerup', (ev) => {
   if (!game) return;
@@ -199,26 +274,50 @@ canvas.addEventListener('pointerup', (ev) => {
   pointerDown = false;
   if (!wasDown) return;
   const p = toWorld(ev);
-  if (armedSpell) {
-    const sp = game.spells.find((s) => s.id === armedSpell)!;
-    const err = game.spellBlock(sp.id);
-    if (!err && game.castSpell(sp.id, p.x, p.y)) { audio.play('ability', { x: p.x }); toast(`${sp.name}!`, 'good'); }
-    else { audio.play('error'); toast(`${sp.name}: ${err ?? 'can\'t cast now'}`, 'bad'); }
-    armedSpell = null; return;
-  }
+  if (armedSpell) { castAt(p); return; }
   if (rallyEdit) {
     const err = game.setRally(rallyEdit, p.x, p.y);
     if (err) { audio.play('error'); toast(err, 'bad'); }
     else { audio.play('click'); toast('Rally point moved', 'good'); rallyEdit = null; panelKey = ''; }
     return;
   }
-  if (placing) { updateGhost(p); tryPlace(ev.shiftKey); return; }
-  const hit = game.towers.find((t) => Math.hypot(t.x - p.x, t.y - p.y) <= t.radius + 8);
-  select(hit ?? null);
+  if (placing) { updateGhost(p); if (!tryPlace(ev.shiftKey) && ghost?.reason) toast(ghost.reason, 'bad'); return; }
+  const hit = towerAt(p, ev.pointerType === 'mouse' ? 8 : 16);
+  select(hit && hit === selected ? null : hit); // tapping the open tower again closes its panel
 });
+canvas.addEventListener('pointerleave', () => { if (hover) { hover = null; canvas.style.cursor = ''; } });
+/** The tower under a point: the nearest one within its radius plus some slack (more for fingers). */
+function towerAt(p: { x: number; y: number }, slack: number): Tower | null {
+  let best: Tower | null = null, bd = Infinity;
+  for (const t of game!.towers) { const d = Math.hypot(t.x - p.x, t.y - p.y); if (d <= t.radius + slack && d < bd) { bd = d; best = t; } }
+  return best;
+}
+function castAt(p: { x: number; y: number }) {
+  if (!game || !armedSpell) return;
+  const sp = game.spells.find((s) => s.id === armedSpell)!;
+  const err = game.spellBlock(sp.id);
+  if (!err && game.castSpell(sp.id, p.x, p.y)) { audio.play('ability', { x: p.x }); haptic(18); toast(`${sp.name}!`, 'good'); }
+  else { audio.play('error'); toast(`${sp.name}: ${err ?? 'can\'t cast now'}`, 'bad'); }
+  armedSpell = null;
+}
+let hover: Tower | null = null;
+/** A targeted spell dragged from its button straight onto the map (a tap still arms it for the next tap on the map). */
+let spellDrag: { id: string; pid: number; x: number; y: number; active: boolean } | null = null;
+window.addEventListener('pointermove', (ev) => {
+  if (!spellDrag || ev.pointerId !== spellDrag.pid || !game) return;
+  if (!spellDrag.active && Math.hypot(ev.clientX - spellDrag.x, ev.clientY - spellDrag.y) >= dragStartPx(ev)) { spellDrag.active = true; armedSpell = spellDrag.id; cancelPlacing(); }
+  if (spellDrag.active) cursor = dropOnMap(ev) ? toWorld(ev, true) : null;
+});
+window.addEventListener('pointerup', (ev) => {
+  if (!spellDrag || ev.pointerId !== spellDrag.pid) return;
+  const sd = spellDrag; spellDrag = null;
+  if (!sd.active) return;
+  if (dropOnMap(ev)) castAt(toWorld(ev, true)); else armedSpell = null;
+});
+window.addEventListener('pointercancel', (ev) => { if (spellDrag && ev.pointerId === spellDrag.pid) { if (spellDrag.active) armedSpell = null; spellDrag = null; } });
 canvas.addEventListener('pointercancel', () => { pointerDown = false; });
 canvas.addEventListener('contextmenu', (e) => { e.preventDefault(); cancelAll(); });
-canvas.addEventListener('pointerleave', () => { if (placing && !pointerDown && !drag) ghost = undefined; cursor = null; });
+canvas.addEventListener('pointerleave', () => { if (placing && !pointerDown && !drag) ghost = undefined; if (!spellDrag?.active) cursor = null; });
 window.addEventListener('keyup', (e) => { if (e.key === 'Shift') shiftHeld = false; });
 window.addEventListener('keydown', (e) => {
   if (e.key === 'Shift') shiftHeld = true;
@@ -242,7 +341,7 @@ function beginPlacing(id: string) {
   placing = id; ghost = undefined;
   audio.play('click');
 }
-function cancelPlacing() { placing = null; ghost = undefined; }
+function cancelPlacing() { placing = null; ghost = undefined; if (!drag) hideAvatar(); }
 function cancelSpells() { armedSpell = null; rallyEdit = null; }
 /** Escape / right-click: cancel the innermost mode. Returns true if something was cancelled. */
 function cancelAll() {
@@ -409,6 +508,8 @@ function iconURL(defId: string, isHero: boolean) {
 const img = (defId: string, isHero = false, size = 52) => `<img src="${iconURL(defId, isHero)}" width="${size}" height="${size}" alt="" draggable="false">`;
 
 let shopKey = '';
+let costKey = '';
+let moreT = 0;
 function renderSide() {
   if (!game) return;
   const g = game;
@@ -427,9 +528,12 @@ function renderSide() {
     tpanel.classList.toggle('on', !!t && !rallyEdit);
     if (t) tpanel.classList.toggle('L', t.x > WORLD_W / 2);
   }
-  document.querySelectorAll<HTMLElement>('#tiles [data-cost], #tpanel [data-cost]').forEach((el) => el.classList.toggle('poor', g.gold < Number(el.dataset.cost)));
-  sbody.classList.toggle('more', sbody.scrollHeight > sbody.clientHeight + 2); // fade the bottom row when the list runs past the rail
-  if (t) { const st = tpanel.querySelector('.tq-sub'); if (st) st.textContent = towerStatLine(t); }
+  const ck = `${Math.floor(g.gold)}|${key}|${shopKey}`;
+  if (ck !== costKey) { costKey = ck; document.querySelectorAll<HTMLElement>('#tiles [data-cost], #tpanel [data-cost]').forEach((el) => el.classList.toggle('poor', g.gold < Number(el.dataset.cost))); }
+  // the fade for an overflowing list needs a layout read, so it's checked twice a second, not every frame
+  const now = performance.now();
+  if (now - moreT > 500) { moreT = now; sbody.classList.toggle('more', sbody.scrollHeight > sbody.clientHeight + 2); }
+  if (t) { const st = tpanel.querySelector('.tq-sub'), line = towerStatLine(t); if (st && st.textContent !== line) st.textContent = line; }
 }
 
 /** Plain-language combat record for a tower. */
@@ -632,7 +736,7 @@ abil.addEventListener('pointerdown', (ev) => {
     const sp = game.spells.find((s) => s.id === id)!;
     const err = game.spellBlock(id);
     if (err) { audio.play('error'); toast(`${sp.name}: ${err}`, 'bad'); return; }
-    if (sp.targeted) { armedSpell = armedSpell === id ? null : id; cancelPlacing(); rallyEdit = null; }
+    if (sp.targeted) { armedSpell = armedSpell === id ? null : id; cancelPlacing(); rallyEdit = null; if (armedSpell) spellDrag = { id, pid: ev.pointerId, x: ev.clientX, y: ev.clientY, active: false }; }
     else if (game.castSpell(id)) { audio.play('ability'); toast(id === 'reinforce' ? `${sp.name}: +${game.lastHeal} lives` : `${sp.name}!`, 'good'); }
   } else {
     const t = game.towers.find((x) => x.uid === Number(uid));
@@ -994,6 +1098,7 @@ function showMenu(screen: 'main' | 'play' | 'tree' | 'settings' | 'how' | 'shop'
       <label class="slider"><span>Music volume</span><input type="range" min="0" max="100" value="${Math.round(st.musicVol * 100)}" data-s="musicVol"></label>
       ${tog('auto', 'Auto-start waves', st.autoStart)}
       ${tog('advisor', 'Advisor tips (★ suggested tower)', st.advisor)}
+      ${'vibrate' in navigator ? tog('haptics', 'Vibration', st.haptics !== false) : ''}
       <button class="toggle" data-g="quality"><span>Graphics</span><em>${st.quality === 'high' ? 'High' : 'Battery saver'}</em></button>
       ${document.fullscreenEnabled ? `<button class="toggle ${document.fullscreenElement ? 'on' : ''}" data-g="full" role="switch" aria-pressed="${!!document.fullscreenElement}"><span>Fullscreen</span><i class="sw"></i></button>` : ''}
       <button class="toggle" data-g="tutorial"><span>Replay tutorial</span><em>${profile.tutorialDone ? 'Next game' : 'On'}</em></button>
@@ -1103,6 +1208,7 @@ menu.addEventListener('click', (ev) => {
     case 'music': profile.settings.music = !profile.settings.music; audio.setMusic(profile.settings.music); saveProfile(profile); showMenu('settings'); break;
     case 'auto': profile.settings.autoStart = !profile.settings.autoStart; saveProfile(profile); showMenu('settings'); break;
     case 'advisor': profile.settings.advisor = !profile.settings.advisor; saveProfile(profile); showMenu('settings'); break;
+    case 'haptics': profile.settings.haptics = profile.settings.haptics === false; saveProfile(profile); haptic(12); showMenu('settings'); break;
     case 'quality': profile.settings.quality = profile.settings.quality === 'high' ? 'low' : 'high'; saveProfile(profile); showMenu('settings'); break;
     case 'full': toggleFullscreen(); setTimeout(() => showMenu('settings'), 200); break;
     case 'tutorial': profile.tutorialDone = false; saveProfile(profile); showMenu('settings'); break;
@@ -1191,6 +1297,7 @@ let acc = 0;
 const STEP = 1 / 60;
 /** Max sim steps per frame: 24 keeps 3× speed in real time down to 10 fps without a death spiral. */
 const MAX_STEPS = 24;
+let wasBusy = false;
 function frame(now: number) {
   const dt = Math.min(0.1, (now - last) / 1000);
   last = now;
@@ -1215,13 +1322,13 @@ function frame(now: number) {
     if (placing && ghost) updateGhost(ghost);
     const rt = rallyEdit ?? (selected?.stats.barracks ? selected : null);
     const rp = rt ? game.rallyPos(rt) : null;
-    renderer.draw(game, { ghost, selected, targeting: !!armedSpell, cursor, hint: tutStep === 0 ? tutSpot : null, rally: rt && rp ? { tx: rt.x, ty: rt.y, r: Game.RALLY_RANGE, x: rp.x, y: rp.y, editing: !!rallyEdit } : null });
+    renderer.draw(game, { ghost, selected, hover, targeting: !!armedSpell, cursor, hint: tutStep === 0 ? tutSpot : null, rally: rt && rp ? { tx: rt.x, ty: rt.y, r: Game.RALLY_RANGE, x: rp.x, y: rp.y, editing: !!rallyEdit } : null });
     refreshTop();
     renderWaveBox();
     renderSide();
     renderHud();
     renderAbil();
-    { const busy = !!(placing || armedSpell || rallyEdit); $('#stage').classList.toggle('coach-hide', busy); side.classList.toggle('coach-hide', busy); }
+    { const busy = !!(placing || armedSpell || rallyEdit); if (busy !== wasBusy) { wasBusy = busy; side.classList.toggle('coach-hide', busy); } }
   }
   requestAnimationFrame(frame);
 }
@@ -1234,7 +1341,7 @@ showMenu('main');
 (window as unknown as { __ss: unknown }).__ss = {
   get game() { return game; },
   /** UI state snapshot for automated tests. */
-  ui() { return { placing, ghost: ghost ? { x: ghost.x, y: ghost.y, valid: ghost.valid, reason: ghost.reason ?? null } : null, autoT, paused, speed, selected: selected?.uid ?? null, rally: !!rallyEdit, tut: tutStep, screen: menuScreen, drag: !!drag }; },
+  ui() { return { armed: armedSpell, spellDrag: spellDrag ? { ...spellDrag } : null, placing, ghost: ghost ? { x: ghost.x, y: ghost.y, valid: ghost.valid, reason: ghost.reason ?? null } : null, autoT, paused, speed, selected: selected?.uid ?? null, rally: !!rallyEdit, tut: tutStep, screen: menuScreen, drag: !!drag }; },
   worldToClient(x: number, y: number) { const r = canvas.getBoundingClientRect(); return { x: r.left + (x / WORLD_W) * r.width, y: r.top + (y / WORLD_H) * r.height }; },
   audio,
   enemies(time = 1.3) {
