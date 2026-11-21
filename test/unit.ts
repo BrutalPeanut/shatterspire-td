@@ -1,5 +1,5 @@
 // Focused regression tests for core rules. Run: npx tsx test/unit.ts
-import { Game } from '../src/core/game';
+import { Game, bossLeak } from '../src/core/game';
 import { HEROES, HERO_XP, heroLevel } from '../src/core/heroes';
 import { waveInfo } from '../src/core/waves';
 import { MAPS, distToPath, PATH_WIDTH } from '../src/core/maps';
@@ -201,6 +201,15 @@ for (const m of MAPS) {
   const g = fresh(); for (let i = 0; i < 3; i++) ok(g.usePower('chest'), `power ${i + 1} allowed`);
   ok(/per battle/.test(g.powerBlock('chest') ?? '') && !g.usePower('chest'), '4th power in a battle is refused');
   ok(Game.restore(g.serialize()).powersUsed === 3, 'power count survives save/restore');
+}
+
+{ // a leaking boss costs lives by remaining health instead of ending the run
+  ok(bossLeak(60, 1, 400) === 3, 'near-dead boss costs the minimum 3 lives');
+  ok(bossLeak(60, 200, 400) === 30, 'half-health boss costs half its leak value');
+  ok(bossLeak(60, 400, 400) === 60, 'full-health boss costs its full leak value');
+  const g = fresh(); g.lives = 150; g.state = 'wave';
+  const e = g.spawn('golemking', '', 0); e.hp = 1; e.d = 1e9; g.update(0.016);
+  ok(g.lives === 147 && (g.state as string) !== 'over', `a 1-HP Golem King leak leaves the run alive (lives ${g.lives}, ${g.state})`);
 }
 
 console.log(`${passes} passed, ${fails} failed`);

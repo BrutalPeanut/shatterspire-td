@@ -97,6 +97,9 @@ class Grid {
 // ---------------------------------------------------------------- game
 export interface GameOptions { mapId: string; difficulty: Difficulty; heroId: string; seed?: number; unlockedTowers?: string[]; perks?: string[] }
 
+/** A boss that gets through costs lives in proportion to the health it has left: a near-dead boss is a scratch, a fresh one is a disaster. */
+export function bossLeak(full: number, hp: number, maxHp: number) { return Math.max(3, Math.ceil(full * Math.max(0, hp) / maxHp)); }
+
 export class Game {
   map: MapDef; paths: PathInfo[]; diff: Difficulty; heroId: string;
   enemies: Enemy[] = []; towers: Tower[] = []; projectiles: Projectile[] = []; soldiers: Soldier[] = [];
@@ -608,7 +611,7 @@ export class Game {
       const p = this.paths[e.path];
       if (e.d >= p.len) {
         e.dead = true;
-        const lost = e.def.boss ? 99999 : Math.ceil(rbe(e.type) - (e.maxHp - e.hp));
+        const lost = e.def.boss ? bossLeak(e.def.leakLives ?? 100, e.hp, e.maxHp) : Math.ceil(rbe(e.type) - (e.maxHp - e.hp));
         this.lives -= lost;
         this.stats.leaked += lost;
         this.stats.leakedBy[e.def.name] = (this.stats.leakedBy[e.def.name] ?? 0) + lost;

@@ -19,25 +19,25 @@ export const WAVES: WaveGroup[][] = [
   /* 11 */[g('orc', 14, 0.4), g('troll', 8, 0.7, 4)],
   /* 12 */[g('goblin', 20, 0.3), g('orc', 15, 0.4, 3), g('ogre', 6, 0.8, 8)],
   /* 13 */[g('orc', 20, 0.35), g('troll', 10, 0.7, 4, 'r')],
-  /* 14 */[g('orc', 50, 0.22), g('troll', 8, 0.5, 6), g('ogre', 8, 0.5, 10)],
+  /* 14 */[g('orc', 60, 0.19), g('troll', 8, 0.5, 6), g('ogre', 8, 0.5, 10)],
   /* 15 */[g('troll', 20, 0.4), g('gloom', 6, 1, 5)],
-  /* 16 */[g('ogre', 12, 0.5), g('frostling', 8, 0.8, 4)],
+  /* 16 */[g('ogre', 16, 0.45), g('frostling', 8, 0.8, 4)],
   /* 17 */[g('goblin', 20, 0.4, 0, 's'), g('troll', 15, 0.5, 5)],
-  /* 18 */[g('ogre', 30, 0.3), g('hexling', 6, 0.9, 6)],
-  /* 19 */[g('troll', 40, 0.25), g('wraith', 10, 0.7, 6)],
+  /* 18 */[g('ogre', 36, 0.27), g('hexling', 6, 0.9, 6)],
+  /* 19 */[g('troll', 48, 0.22), g('wraith', 10, 0.7, 6)],
   /* 20 */[g('ogre', 20, 0.4), g('golemking', 1, 1, 6)],
-  /* 21 */[g('gloom', 20, 0.4), g('iron', 4, 1.5, 4)],
-  /* 22 */[g('ogre', 25, 0.25), g('wraith', 10, 0.6, 4, 'r')],
+  /* 21 */[g('gloom', 28, 0.32), g('iron', 6, 1.2, 4)],
+  /* 22 */[g('ogre', 32, 0.22), g('wraith', 14, 0.5, 4, 'r')],
   /* 23 */[g('orc', 20, 0.3, 0, 's'), g('iron', 8, 1, 4), g('hexling', 8, 0.6, 8), g('hydra', 3, 1.5, 11)], // first hydras arrive in a small group
   /* 24 */[g('hydra', 15, 0.7), g('golem', 2, 2, 8)], // first golems arrive in a small group
   /* 25 */[g('ogre', 24, 0.2), g('golem', 4, 1.2, 4)], // 536 RBE (was 774)
   /* 26 */[g('golem', 8, 1.5), g('behemoth', 1, 1, 5)], // first giant. Same enemies as before, half the density (was 0.8s spacing)
-  /* 27 */[g('wraith', 15, 0.5, 0, 's'), g('iron', 10, 0.8, 4)],
+  /* 27 */[g('wraith', 20, 0.45, 0, 's'), g('iron', 12, 0.7, 4)],
   /* 28 */[g('golem', 10, 1.0), g('hydra', 10, 0.8, 5, 'r')], // same enemies, less burst (was 0.6s / 0.5s)
   /* 29 */[g('wraith', 20, 0.3), g('behemoth', 2, 3, 6)],
-  /* 30 */[g('golem', 10, 0.8), g('lich', 1, 1, 6)],
-  /* 31 */[g('hydra', 30, 0.3), g('behemoth', 3, 2.5, 6)],
-  /* 32 */[g('golem', 25, 0.4, 0, 'r')],
+  /* 30 */[g('golem', 7, 0.9), g('lich', 1, 1, 6)], // boss wave: lighter escort (was 10 golems at 0.8s)
+  /* 31 */[g('hydra', 36, 0.26), g('behemoth', 3, 2.2, 6)],
+  /* 32 */[g('golem', 30, 0.36, 0, 'r')],
   /* 33 */[g('behemoth', 5, 2)],
   /* 34 */[g('iron', 30, 0.3), g('golem', 20, 0.5, 6, 's')],
   /* 35 */[g('golem', 20, 0.4), g('warbeast', 1, 1, 10)],
@@ -109,7 +109,7 @@ export function waveInfo(round: number): WaveInfo {
     while (stack.length) { const id = stack.pop()!; const ed = ENEMIES[id]; for (const i of ed.immune) { const l = imm.get(i) ?? []; if (!l.includes(ed.name)) l.push(ed.name); imm.set(i, l); } stack.push(...ed.children.filter((c) => ENEMIES[c].rank >= 6)); }
     for (const m of ['s', 'r', 'f'] as const) if (u.mods.includes(m)) modSeen[m] = true;
   }
-  if (boss) { const b = units.find((u) => ENEMIES[u.type].boss)!; threats.push({ tag: 'BOSS', text: `${b.name}: if it reaches the Spire you lose instantly. Save Meteor and abilities for it.`, danger: true }); }
+  if (boss) { const b = units.find((u) => ENEMIES[u.type].boss)!; threats.push({ tag: 'BOSS', text: `${b.name}: costs up to ${ENEMIES[b.type].leakLives ?? 100} lives if it reaches the Spire (less the more you hurt it). Save Meteor and abilities for it.`, danger: true }); }
   for (const u of units) {
     const d = ENEMIES[u.type];
     if (d.giant && !d.boss) threats.push({ tag: u.isNew ? 'NEW GIANT' : 'GIANT', text: `${u.count}× ${d.name} (${Math.round(d.hp)} HP shell). One leak costs ~${Math.ceil(rbe(u.type) * (u.mods.includes('f') ? 1.6 : 1))} lives! Needs heavy single-target damage: Ballista, Cannon (Big Bombs), Mage.`, danger: true });

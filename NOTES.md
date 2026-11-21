@@ -225,3 +225,8 @@ The battle screen was rebuilt map-first. Menus, setup, modals and the recap were
 - Bells are harmonic `chime()` (integer partials); no inharmonic FM. Reverb is 1.7 s, light sends (sfx 0.1, music 0.32). Pops are rate-limited (45 ms) with an 18-voice cap counted over 220 ms.
 - Music: Dm-F-C-Dm-Am-F-G-Dm, every chord built from scale tones; pads release before the next bar. Combat adds tuned taiko, a shaker and a pulse bass.
 - Preview: `a.init(new OfflineAudioContext(...)); a.scheduleMusic(sec, combatAt); a.play(name, {at})` renders offline (see the PR for the render script).
+
+## Boss leaks and the boss-wave cliff (same PR)
+- A boss reaching the Spire no longer ends the run. It costs `bossLeak(def.leakLives, hp, maxHp)` = leakLives × remaining-health fraction, min 3 (Golem King 60, Lich 100, Dragon 160). Brian lost a 73-life run to a Golem King at 1/400 HP.
+- Cliff smoothing: Lich HP 1600→1150, Dragon 6400→4800, wave-30 escort 10→7 golems; normal waves 14,16,18,19,21,22,27,31,32 got denser.
+- Balance: 38/72 → 57/72 bot wins. Remaining deaths: Ember Pass / Spire Summit at wave 40 and the wave 9-10 early wall on those maps. Optimal-spend bots still clear Meadow/Caverns on Medium without leaking, so a real "too easy" fix needs a smarter bot or human playtests.

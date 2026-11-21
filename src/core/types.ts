@@ -152,6 +152,8 @@ export interface EnemyDef {
   color: string;
   giant?: boolean;
   boss?: boolean;
+  /** Lives a boss costs if it reaches the Spire at full health; scaled by the health it has left (min 3). */
+  leakLives?: number;
   immune: DamageType[];
   rank: number;
   gold: number; // gold awarded for destroying this layer
