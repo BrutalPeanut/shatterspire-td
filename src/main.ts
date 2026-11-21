@@ -1,11 +1,7 @@
+import './fonts.css';
 import '@fontsource/cinzel/latin-700.css';
-import '@fontsource/cinzel/latin-900.css';
 import '@fontsource/cinzel-decorative/latin-900.css';
-import '@fontsource/lilita-one/latin-400.css';
-import '@fontsource/nunito/latin-700.css';
-import '@fontsource/nunito/latin-800.css';
-import './style.css';
-import './battle.css';
+import './ui.css';
 import { Game, DIFF, type Tower } from './core/game';
 import { MAPS } from './core/maps';
 import { TOWERS, TOWER_MAP, canUpgradePath } from './core/towers';
@@ -20,7 +16,7 @@ import { Renderer, type Overlay } from './render/renderer';
 import { drawEnemyModel } from './render/enemyArt';
 import { ENEMIES } from './core/enemies';
 import { audio } from './audio/audio';
-import { ICON } from './ui/icons';
+import { ICON, POWER_ICON, SPELL_ICON } from './ui/icons';
 import { BUILD_ORDER, DTYPE, GROUPS, baseStats, groupOf, infoFor } from './ui/towerInfo';
 import { clearRun, heroUnlocked, loadProfile, loadRun, mapUnlocked, medalCount, perkPointsLeft, saveProfile, saveRun, towerUnlocked, type Profile } from './save';
 
@@ -36,8 +32,8 @@ document.getElementById('app')!.innerHTML = `
       <div class="hs lives" title="Lives">${ICON.heart}<span id="lives">0</span></div>
       <div class="hs gold" title="Gold">${ICON.coin}<span id="gold">0</span></div>
       <div class="sp"></div>
-      <div class="hs round" title="Wave"><small>Round</small><span id="round">0</span></div>
-      <button class="cb" id="pauseBtn" title="Pause (P / Esc)">${ICON.pause}</button>
+      <div class="hs round" title="Wave"><small>Wave</small><span id="round">0</span><i class="wprog"><b id="wprog"></b></i></div>
+      <button class="cb" id="pauseBtn" title="Pause (P / Esc)" aria-label="Pause">${ICON.pause}</button>
     </div>
     <div id="abil"></div>
   </div>
@@ -82,8 +78,7 @@ function layout() {
   const h = field.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
   if (!w || !h) return;
   const s = Math.min(w / WORLD_W, h / WORLD_H);
-  renderer.resize(Math.floor(WORLD_W * s), Math.floor(WORLD_H * s));
-  if (profile.settings.quality === 'low') renderer.dpr = Math.min(renderer.dpr, 1);
+  renderer.resize(Math.floor(WORLD_W * s), Math.floor(WORLD_H * s), profile.settings.quality === 'low' ? 1 : 2);
 }
 window.addEventListener('resize', () => setTimeout(layout, 50));
 window.addEventListener('orientationchange', () => setTimeout(layout, 200));
@@ -107,8 +102,10 @@ let toastT = 0;
 function toast(msg: string, kind: 'info' | 'bad' | 'good' = 'info') {
   const box = $('#toast');
   box.innerHTML = `<div class="toast ${kind}">${esc(msg)}</div>`;
+  const wrap = $('#slotw'); wrap.classList.add('msg'); // the wave info steps aside so the two never overlap
   clearTimeout(toastT);
-  toastT = window.setTimeout(() => { box.innerHTML = ''; }, 2800);
+  toastT = window.setTimeout(() => { wrap.classList.remove('msg'); }, 2450);
+  window.setTimeout(() => { if (!wrap.classList.contains('msg')) box.innerHTML = ''; }, 2900);
 }
 
 // ================================================================ placement
@@ -288,6 +285,7 @@ function refreshTop() {
   $('#lives').textContent = fmt(Math.max(0, game.lives));
   $('#gold').textContent = fmtShort(game.gold);
   $('#round').textContent = game.freeplay ? `${game.round}` : `${game.round}/${game.totalWaves}`;
+  $('#wprog').style.width = game.freeplay ? '100%' : `${Math.min(100, (game.round / game.totalWaves) * 100)}%`;
   $('#spd').textContent = `${speed}×`;
   $('#speedBtn').classList.toggle('on', speed > 1);
   $('#autoState').textContent = auto ? 'On' : 'Off';
@@ -298,8 +296,8 @@ function refreshTop() {
   const building = game.state === 'build';
   const next = game.round + 1;
   // one round button: Play between waves, a dimmed "fighting" state during one
-  if (building && autoT !== null) sb.innerHTML = `${ICON.play}<span class="cl">in ${Math.ceil(autoT)}s</span>`;
-  else if (building) sb.innerHTML = `${ICON.play}<span class="cl">${game.round === 0 ? 'Start' : `Wave ${next}`}</span>`;
+  if (building && autoT !== null) sb.innerHTML = `${ICON.play}<span class="cl">Wave ${next} in ${Math.ceil(autoT)}s</span>`;
+  else if (building) sb.innerHTML = `${ICON.play}<span class="cl">${game.round === 0 ? 'Start' : `Start wave ${next}`}</span>`;
   else sb.innerHTML = `${ICON.swords}<span class="cl">Wave ${game.round}</span>`;
   sb.title = building ? `Start wave ${next} (Space)` : 'Wave in progress';
   sb.classList.toggle('running', !building);
@@ -326,7 +324,7 @@ function renderWaveBox() {
   const chips = wi.freeplay ? '<span class="chip">FREEPLAY</span>' : wi.threats.slice(0, 4).map((t) => `<span class="chip ${t.danger ? 'danger' : ''}">${esc(t.tag)}</span>`).join('');
   const rec = building && profile.settings.advisor ? recommendTower(g, r) : null;
   recId = rec?.tower ?? null;
-  const tip = rec ? `<span class="chip gold" title="${esc(rec.why)}">★ ${esc(TOWER_MAP[rec.tower].name)}</span>` : '';
+  const tip = rec ? `<span class="chip gold" title="${esc(rec.why)}">${ICON.star.replace('class="ico"', 'class="ico sm"')} ${esc(TOWER_MAP[rec.tower].name)}</span>` : '';
   const hoard = building && (wi.giant || wi.boss) && g.gold >= 1500 ? `<span class="chip gold">${fmtShort(g.gold)} gold unspent</span>` : '';
   const head = building ? `Next: wave ${r}` : `${left} enemies left`;
   const units = wi.units.map((u) => `${u.count} ${u.name}${u.count > 1 && !u.name.endsWith('s') ? 's' : ''}`).join(', ');
@@ -341,11 +339,11 @@ function waveDetails() {
   const threats = wi.threats.map((t) => `<li class="${t.danger ? 'dg' : ''}"><span class="chip ${t.danger ? 'danger' : ''}">${esc(t.tag)}</span> ${esc(t.text)}</li>`).join('');
   const rec = g.state === 'build' && profile.settings.advisor ? recommendTower(g, r) : null;
   modal(`<h2>Wave ${r}</h2>
-    ${rec ? `<div class="rc-cause advisor">★ Advisor: add a <b>${esc(TOWER_MAP[rec.tower].name)}</b>. ${esc(rec.why)}.</div>` : ''}
+    ${rec ? `<div class="rc-cause advisor">${ICON.star} Advisor: add a <b>${esc(TOWER_MAP[rec.tower].name)}</b>. ${esc(rec.why)}.</div>` : ''}
     ${wi.freeplay ? '<div class="hint">Freeplay waves are randomized giants and armored hordes that grow every round.</div>' : `<ul class="wlist">${rows}</ul>
     <div class="hint">Threat size: <b>${fmt(wi.rbe)}</b> layers${wi.worstLeak !== Infinity ? ` · worst single leak: <b>${fmt(wi.worstLeak)}</b> lives` : ''}.</div>`}
     ${threats ? `<ul class="tlist">${threats}</ul>` : '<div class="hint">No special traits. Any tower works.</div>'}
-    <button class="mbtn btn3d gilt" data-m="resume">Got it</button>`);
+    <button class="mbtn btn pri" data-m="resume">Got it</button>`);
 }
 
 // ================================================================ side panel
@@ -366,6 +364,9 @@ function panelClick(ev: Event) {
     const order: Targeting[] = ['first', 'last', 'strong', 'close'];
     selected.targeting = order[(order.indexOf(selected.targeting) + (v === '-1' ? 3 : 1)) % 4];
     panelKey = ''; audio.play('click');
+  } else if (a === 'tmode') {
+    if (!selected) return;
+    selected.targeting = v as Targeting; panelKey = ''; audio.play('click');
   } else if (a === 'withdraw' && selected) { game.withdraw(selected); audio.play('coin'); panelKey = ''; }
   else if (a === 'rally' && selected) { rallyEdit = rallyEdit ? null : selected; audio.play('click'); panelKey = ''; }
   else if (a === 'powers') powersMenu();
@@ -462,18 +463,18 @@ function shopPanel() {
 }
 /** Explains the tower groups and a sensible build order. */
 function creditsModal() {
-  const fonts: [string, string][] = [['Cinzel', '© 2020 The Cinzel Project Authors'], ['Cinzel Decorative', '© 2012 Natanael Gama'], ['Lilita One', '© 2011 Juan Montoreano'], ['Nunito', '© 2014 The Nunito Project Authors']];
+  const fonts: [string, string][] = [['Inter', '© 2016 The Inter Project Authors'], ['Cinzel', '© 2020 The Cinzel Project Authors'], ['Cinzel Decorative', '© 2012 Natanael Gama']];
   modal(`<h2>Credits &amp; licences</h2>
     <div class="hint">Shatterspire is an original game. Its art is drawn in code and its sound is synthesised in the game. It is not affiliated with, or based on, any other game, book or film.</div>
     <div class="ti-h">Fonts (SIL Open Font License 1.1)</div><ul class="rc-tips">${fonts.map(([n, c]) => `<li><b>${n}</b> ${c}</li>`).join('')}</ul>
     <div class="hint">Licence text: openfontlicense.org</div>
-    <button class="mbtn btn3d gilt" data-m="resume">Close</button>`);
+    <button class="mbtn btn pri" data-m="resume">Close</button>`);
 }
 function groupGuide(focus?: string) {
   const rows = GROUPS.map((gr) => `<div class="gg ${gr.id === focus ? 'focus' : ''}" style="--gc:${gr.color}"><div class="gg-h"><b>${esc(gr.name)}</b><span>${gr.towers.map((t) => esc(t === 'hero' ? 'your hero' : TOWER_MAP[t].name)).join(' · ')}</span></div><div class="gg-t">${esc(gr.how)}</div></div>`).join('');
   modal(`<h2>Tower Guide</h2><div class="hint">Every tower has a job. A strong defense mixes groups.</div>${rows}
     <div class="ti-h">A good build order</div><ol class="rc-tips">${BUILD_ORDER.map((x) => `<li>${esc(x)}</li>`).join('')}</ol>
-    <button class="mbtn btn3d gilt" data-m="resume">Got it</button>`);
+    <button class="mbtn btn pri" data-m="resume">Got it</button>`);
   if (focus) modalEl.querySelector('.gg.focus')?.scrollIntoView({ block: 'center' });
 }
 function updateShop() {
@@ -501,8 +502,8 @@ function updateShop() {
 function towerPanel(t: Tower) {
   const g = game!;
   const head = (name: string, isHero: boolean) => `<div class="tq-head">${img(t.defId, isHero)}<div class="tq-id"><div class="tq-name">${esc(name)}</div><div class="tq-sub"></div></div><button class="tq-ib tq-info" data-a="info" title="What this tower does">${ICON.info}</button><button class="tq-ib tq-x" data-a="close" title="Close (Esc)">${ICON.close}</button></div>`;
-  const tlabel = t.targeting[0].toUpperCase() + t.targeting.slice(1);
-  const target = t.stats.attacks.length ? `<div class="tq-target" title="Which enemy to shoot"><button data-a="target" data-v="-1" aria-label="Previous target mode">◀</button><span>Target: <b>${tlabel}</b></span><button data-a="target" data-v="1" aria-label="Next target mode">▶</button></div>` : '';
+  const modes: [Targeting, string][] = [['first', 'First'], ['last', 'Last'], ['strong', 'Strong'], ['close', 'Close']];
+  const target = t.stats.attacks.length ? `<div class="tq-target" role="radiogroup" aria-label="Which enemy to shoot">${modes.map(([m, l]) => `<button data-a="tmode" data-v="${m}" role="radio" aria-checked="${t.targeting === m}" class="${t.targeting === m ? 'on' : ''}">${l}</button>`).join('')}</div>` : '';
   let h = '';
   if (t.isHero) {
     const hd = HERO_MAP[t.defId];
@@ -558,9 +559,9 @@ function towerInfoModal(defId: string, isHero: boolean, lockNote?: string) {
   const name = isHero ? HERO_MAP[defId].name : TOWER_MAP[defId].name;
   const cost = game ? game.towerCost(isHero ? 'hero' : defId) : isHero ? HERO_MAP[defId].cost : TOWER_MAP[defId].cost;
   modal(`<div class="ti-head">${img(defId, isHero, 64)}<div><h2>${esc(name)}</h2><div class="ti-cost">${ICON.coinSmall} ${fmt(cost)} · <b>${esc(infoFor(defId, isHero).tag)}</b></div></div></div>
-    ${lockNote ? `<div class="hint" style="color:#8a1610">🔒 ${esc(lockNote)}</div>` : ''}
+    ${lockNote ? `<div class="m-note bad">${ICON.lock} ${esc(lockNote)}</div>` : ''}
     <div class="ti">${infoBody(defId, isHero, false)}</div>
-    <button class="mbtn btn3d gilt" data-m="resume">Got it</button>`);
+    <button class="mbtn btn pri" data-m="resume">Got it</button>`);
 }
 /** Card under the mouse (desktop); its summary shows in the side panel's info slot. */
 let hoverId: string | null = null;
@@ -594,7 +595,7 @@ function renderHud() {
     key = `p|${placing}|${cost}|${status}|${bad}`;
     const inf = infoFor(placing === 'hero' ? g.heroDef.id : placing, placing === 'hero');
     const btns = `<span class="sl-b"><button data-h="info" aria-label="Tower info">${ICON.info}</button><button class="x" data-h="cancel">${ICON.close} Cancel</button></span>`;
-    html = `<div class="sl sl-place ${bad ? 'bad' : ''}"><b>${esc(nm)} · ${cost === 0 ? 'FREE' : fmt(cost)}</b><span class="sl-l">${esc(inf.line)}</span><span class="sl-u">${bad ? '✖ ' : '✔ '}${esc(status)}</span>${btns}</div>`;
+    html = `<div class="sl sl-place ${bad ? 'bad' : ''}"><b>${esc(nm)} · ${cost === 0 ? 'FREE' : fmt(cost)}</b><span class="sl-l">${esc(inf.line)}</span><span class="sl-u">${esc(status)}</span>${btns}</div>`;
   } else if (armedSpell) {
     const sp = g.spells.find((s) => s.id === armedSpell)!;
     key = `s|${armedSpell}`;
@@ -647,8 +648,8 @@ function renderAbil() {
   if (!game) return;
   const g = game;
   const items: { key: string; icon: string; left: number; cd: number; title: string; name: string; usable: boolean }[] = [];
-  const SPELL_ICON: Record<string, string> = { meteor: ICON.meteor, freeze: ICON.hourglass, reinforce: ICON.shield };
-  for (const s of g.spells) items.push({ key: `s:${s.id}:0`, icon: SPELL_ICON[s.id] ?? s.icon, left: s.left, cd: s.cd, title: `${s.name}: ${s.desc}. ${s.cd}s recharge (battle time).`, name: s.name, usable: !g.spellBlock(s.id) });
+  const SHORT: Record<string, string> = { meteor: 'Meteor', freeze: 'Freeze', reinforce: 'Walls' };
+  for (const s of g.spells) items.push({ key: `s:${s.id}:0`, icon: SPELL_ICON[s.id] ?? s.icon, left: s.left, cd: s.cd, title: `${s.name}: ${s.desc}. ${s.cd}s recharge (battle time).`, name: SHORT[s.id] ?? s.name, usable: !g.spellBlock(s.id) });
   for (const t of g.towers) for (const a of t.abilities) items.push({ key: `t:${a.def.id}:${t.uid}`, icon: `<img src="${iconURL(t.defId, t.isHero)}" alt="" draggable="false">`, left: a.left, cd: a.def.cd, title: `${a.def.name}: ${a.def.cd}s recharge (battle time)`, name: a.def.name, usable: a.left <= 0 && g.state === 'wave' });
   const pw = Object.values(profile.powers).reduce((a, b) => a + b, 0);
   items.push({ key: 'p:powers:0', icon: ICON.sparkle, left: 0, cd: 1, title: 'Powers: one-shot items you earn by playing', name: `Powers (${pw})`, usable: pw > 0 });
@@ -702,7 +703,7 @@ function renderCoach() {
   if (tutStep >= TUT.length) { profile.tutorialDone = true; saveProfile(profile); tutStep = -1; }
   if (tutStep < 0) { coach.classList.remove('on'); coach.innerHTML = ''; document.querySelectorAll('.tut-pulse').forEach((e) => e.classList.remove('tut-pulse')); return; }
   const s = TUT[tutStep];
-  coach.innerHTML = `<div class="cc"><div class="cc-n">${tutStep + 1}/${TUT.length}</div><div class="cc-t"><b>${esc(s.title)}</b><span>${esc(s.text)}</span></div><div class="cc-b">${s.id === 'read' ? '<button class="btn3d gilt" data-c="next">Got it</button>' : '<button class="btn3d woodb" data-c="skip">Skip</button>'}</div></div>`;
+  coach.innerHTML = `<div class="cc"><div class="cc-n">${tutStep + 1}/${TUT.length}</div><div class="cc-t"><b>${esc(s.title)}</b><span>${esc(s.text)}</span></div><div class="cc-b">${s.id === 'read' ? '<button class="btn pri" data-c="next">Got it</button>' : '<button class="btn sec" data-c="skip">Skip</button>'}</div></div>`;
   coach.classList.add('on');
   document.querySelectorAll('.tut-pulse').forEach((e) => e.classList.remove('tut-pulse'));
   const pe = s.pulse ? document.querySelector(s.pulse) : null;
@@ -730,7 +731,7 @@ function flushLeaks() {
   for (const k of Object.keys(leakAgg)) delete leakAgg[k];
   if (game && game.state === 'over') return;
   toast(`Leaked: ${what} (−${fmt(total)} lives)`, 'bad');
-  const sb = document.querySelector('.stat.lives'); if (sb) { sb.classList.remove('hit'); void (sb as HTMLElement).offsetWidth; sb.classList.add('hit'); }
+  const sb = document.querySelector('.hs.lives'); if (sb) { sb.classList.remove('hit'); void (sb as HTMLElement).offsetWidth; sb.classList.add('hit'); }
 }
 function handleEvents() {
   if (!game) return;
@@ -741,10 +742,10 @@ function handleEvents() {
       case 'shoot': audio.play(SHOT_SOUND[e.kind] ?? 'bow', { x: e.x }); break;
       case 'boom': audio.play('boom', { x: e.x }); break;
       case 'leak': audio.play('leak'); { const l = (leakAgg[e.name] ??= { n: 0, lives: 0 }); l.n++; l.lives += e.lives; if (!leakTimer) leakTimer = window.setTimeout(flushLeaks, 700); } break;
-      case 'waveStart': audio.play(e.boss ? 'boss' : 'wave'); if (e.boss) toast('⚠ Boss wave!', 'bad'); break;
+      case 'waveStart': audio.play(e.boss ? 'boss' : 'wave'); if (e.boss) toast('Boss wave!', 'bad'); break;
       case 'waveEnd': onWaveEnd(e.round); break;
       case 'levelUp': audio.play('level'); toast(`Hero reached level ${e.level}!`, 'good'); break;
-      case 'bossDown': toast(`🏆 ${e.name} defeated!`, 'good'); break;
+      case 'bossDown': toast(`${e.name} defeated!`, 'good'); break;
       case 'gameOver': onGameEnd(false); break;
       case 'victory': onGameEnd(true); break;
     }
@@ -758,8 +759,8 @@ function onWaveEnd(round: number) {
   const before = profile.totalRounds;
   profile.totalRounds++;
   { const n = game.isBossWave(round) ? SHARDS_BOSS_WAVE : SHARDS_PER_WAVE; profile.shards += n; battleShards += n; }
-  for (const t of TOWERS) if (before < t.unlockRounds && profile.totalRounds >= t.unlockRounds) toast(`🔓 New tower: ${t.name}!`, 'good');
-  for (const h of HEROES) if (before < h.unlockRounds && profile.totalRounds >= h.unlockRounds) toast(`🔓 New hero: ${h.name}!`, 'good');
+  for (const t of TOWERS) if (before < t.unlockRounds && profile.totalRounds >= t.unlockRounds) toast(`New tower unlocked: ${t.name}`, 'good');
+  for (const h of HEROES) if (before < h.unlockRounds && profile.totalRounds >= h.unlockRounds) toast(`New hero unlocked: ${h.name}`, 'good');
   if (game.freeplay) { const m = (profile.medals[game.map.id] ??= {}); m.freeplay = Math.max(m.freeplay ?? 0, round); }
   saveProfile(profile);
   if (game.state === 'build') saveRun(game);
@@ -784,7 +785,7 @@ function onGameEnd(won: boolean) {
   const g = game;
   audio.play(won ? 'win' : 'lose');
   const earned = powersEarned(g.round, won);
-  const pwIcons = earned.map((id) => POWERS.find((p) => p.id === id)!.icon).join(' ');
+  const pwIcons = earned.map((id) => `<span class="pwi" title="${esc(POWERS.find((p) => p.id === id)!.name)}">${POWER_ICON[id] ?? ICON.sparkle}</span>`).join('');
   const top = g.towers.filter((t) => !t.isHero || t.dmg > 0).sort((a, b) => b.dmg - a.dmg).slice(0, 3)
     .map((t) => `<li><b>${esc(t.isHero ? HERO_MAP[t.defId].name : TOWER_MAP[t.defId].name)}</b>: ${fmtShort(t.dmg)} damage</li>`).join('');
   if (won) {
@@ -792,17 +793,17 @@ function onGameEnd(won: boolean) {
     profile.shards += SHARDS_VICTORY; battleShards += SHARDS_VICTORY;
     let medal = '';
     const m = (profile.medals[g.map.id] ??= {});
-    if (!m[g.diff]) medal = `🏅 New medal: ${g.map.name} (${DIFF[g.diff].label})! +1 knowledge point`;
+    if (!m[g.diff]) medal = `New medal: ${g.map.name} (${DIFF[g.diff].label}). +1 perk point`;
     m[g.diff] = 1;
     saveProfile(profile);
-    modal(`<h2>🏆 Victory!</h2>
+    modal(`<div class="m-hero win">${ICON.trophy}</div><h2>Victory</h2>
       <div class="hint">You held ${esc(g.map.name)} through all ${g.totalWaves} waves. Unspent gold: ${fmtShort(g.gold)}</div>
-      ${top ? `<ul class="wlist">${top}</ul>` : ''}
-      ${medal ? `<div class="hint" style="color:#a8680f">${medal}</div>` : ''}${earned.length ? `<div class="hint">Powers earned: ${pwIcons}</div>` : ''}
-      <div class="hint">${SH} <b>+${battleShards} Shards</b> earned this battle</div>
-      <button class="mbtn big btn3d gilt" data-m="freeplay">Continue: Freeplay</button>
-      <button class="mbtn btn3d woodb" data-m="restart">Restart</button>
-      <button class="mbtn btn3d woodb" data-m="menu">Main Menu</button>`);
+      ${top ? `<div class="ti-h">Top towers</div><ul class="wlist">${top}</ul>` : ''}
+      ${medal ? `<div class="m-note gold">${ICON.medal} ${medal}</div>` : ''}${earned.length ? `<div class="m-note">Powers earned ${pwIcons}</div>` : ''}
+      <div class="m-note shard">${SH} <b>+${battleShards} Shards</b> earned this battle</div>
+      <button class="mbtn big btn pri" data-m="freeplay">Continue: Freeplay</button>
+      <button class="mbtn btn sec" data-m="restart">Restart</button>
+      <button class="mbtn btn sec" data-m="menu">Main Menu</button>`);
     return;
   }
   pendingPowers = earned;
@@ -813,16 +814,16 @@ function onGameEnd(won: boolean) {
   const hist = rc.history.map((h) => `<div class="rc-col ${h.round === rc.round ? 'last' : ''}" title="Wave ${h.round}: −${h.lost} lives"><i style="height:${h.lost ? Math.max(8, (h.lost / maxH) * 100) : 2}%"></i><span>${h.round}</span></div>`).join('');
   const tips = rc.tips.map((t) => `<li>${esc(t.text)}${t.tower ? ` <button class="rc-info" data-m="tinfo:${t.tower}">${ICON.info} ${esc(TOWER_MAP[t.tower].name)}</button>` : ''}</li>`).join('');
   const canRetry = !!g.waveStartSave;
-  recapHtml = `<h2>💀 The Spire Has Fallen</h2>
+  recapHtml = `<div class="m-hero lose">${ICON.skull}</div><h2>The Spire has fallen</h2>
     <div class="hint">${esc(g.map.name)} · ${DIFF[g.diff].label} · fell on wave ${rc.round}</div>
     <div class="rc-cause">${esc(rc.cause)}</div>
     ${leakRows ? `<div class="ti-h">What got through on wave ${rc.round}</div><div class="rc-leaks">${leakRows}</div>` : ''}
     ${rc.history.length > 1 ? `<div class="ti-h">Lives lost per wave</div><div class="rc-hist">${hist}</div>` : ''}
     ${tips ? `<div class="ti-h">How to hold next time</div><ul class="rc-tips">${tips}</ul>` : ''}
     ${top ? `<details class="rc-more"><summary>Your top towers</summary><ul class="wlist">${top}</ul></details>` : ''}
-    ${canRetry ? `<button class="mbtn big btn3d gilt" data-m="retrywave">↻ Retry wave ${rc.round}</button><div class="hint rc-small">Restarts this wave with your defenses as they were before it began, so you can rebuild.</div>` : ''}
-    <button class="mbtn btn3d woodb" data-m="restart">Restart map</button>
-    <button class="mbtn btn3d woodb" data-m="menu">Main Menu</button>
+    ${canRetry ? `<button class="mbtn big btn pri" data-m="retrywave">${ICON.auto} Retry wave ${rc.round}</button><div class="hint rc-small">Restarts this wave with your defenses as they were before it began, so you can rebuild.</div>` : ''}
+    <button class="mbtn btn sec" data-m="restart">Restart map</button>
+    <button class="mbtn btn sec" data-m="menu">Main Menu</button>
     <div class="hint rc-small">${SH} +${battleShards} Shards earned this battle.${earned.length ? ` Powers ${pwIcons} are yours when you leave this run.` : ''}</div>`;
   modal(recapHtml);
 }
@@ -857,7 +858,7 @@ modalEl.addEventListener('click', (ev) => {
   else if (m === 'restart') { grantPending(); if (game) { clearRun(); startGame(game.map.id, game.diff, game.heroId); } closeModal(); }
   else if (m === 'guide') groupGuide();
   else if (m === 'retrywave') { closeModal(); retryWave(); }
-  else if (m.startsWith('tinfo:')) { towerInfoModal(m.slice(6), false); const btn = modalEl.querySelector('[data-m="resume"]'); if (btn && recapHtml && game?.state === 'over') { btn.setAttribute('data-m', 'recap'); btn.textContent = '‹ Back to recap'; } }
+  else if (m.startsWith('tinfo:')) { towerInfoModal(m.slice(6), false); const btn = modalEl.querySelector('[data-m="resume"]'); if (btn && recapHtml && game?.state === 'over') { btn.setAttribute('data-m', 'recap'); btn.innerHTML = `${ICON.back} Back to recap`; } }
   else if (m === 'recap') modal(recapHtml);
   else if (m === 'menu') { grantPending(); if (game && game.state === 'over') clearRun(); else if (game && game.state === 'build' && game.round > 0) saveRun(game); closeModal(); showMenu('main'); }
   else if (m === 'auto') { toggleAuto(); pauseMenu(); }
@@ -881,16 +882,16 @@ modalEl.addEventListener('click', (ev) => {
 
 function pauseMenu() {
   if (!game || game.state === 'over' || game.state === 'victory') return;
-  const fs = document.fullscreenEnabled ? `<button class="mbtn btn3d woodb" data-m="full">Fullscreen: ${document.fullscreenElement ? 'On' : 'Off'}</button>` : '';
+  const fs = document.fullscreenEnabled ? `<button class="mbtn btn sec" data-m="full">Fullscreen: ${document.fullscreenElement ? 'On' : 'Off'}</button>` : '';
   modal(`<h2>Paused</h2>
     <div class="hint">${game.map.name} · ${DIFF[game.diff].label} · Wave ${game.round}${game.state === 'wave' ? ' (in progress)' : ''}</div>
-    <button class="mbtn big btn3d gilt" data-m="resume">${ICON.play} Resume</button>
-    <button class="mbtn btn3d woodb" data-m="auto">Auto-start waves: ${profile.settings.autoStart ? 'On' : 'Off'}</button>
-    <div class="mrow"><button class="mbtn btn3d woodb" data-m="sfx">Sound: ${profile.settings.sfx ? 'On' : 'Off'}</button><button class="mbtn btn3d woodb" data-m="music">Music: ${profile.settings.music ? 'On' : 'Off'}</button></div>
+    <button class="mbtn big btn pri" data-m="resume">${ICON.play} Resume</button>
+    <button class="mbtn btn sec" data-m="auto">Auto-start waves: ${profile.settings.autoStart ? 'On' : 'Off'}</button>
+    <div class="mrow"><button class="mbtn btn sec" data-m="sfx">Sound: ${profile.settings.sfx ? 'On' : 'Off'}</button><button class="mbtn btn sec" data-m="music">Music: ${profile.settings.music ? 'On' : 'Off'}</button></div>
     ${fs}
-    <button class="mbtn btn3d woodb" data-m="guide">Tower Guide</button>
-    <button class="mbtn btn3d woodb" data-m="restart">Restart Map</button>
-    <button class="mbtn btn3d woodb" data-m="menu">Save &amp; Quit</button>
+    <button class="mbtn btn sec" data-m="guide">Tower Guide</button>
+    <button class="mbtn btn sec" data-m="restart">Restart Map</button>
+    <button class="mbtn btn sec" data-m="menu">Save &amp; Quit</button>
     <div class="hint">Progress saves at the end of every wave. Quitting mid-wave resumes from the start of that wave.</div>`);
 }
 
@@ -900,10 +901,10 @@ function powersMenu() {
     const n = profile.powers[p.id] ?? 0;
     const why = !n ? 'None owned' : game?.powerBlock(p.id) ?? '';
     const price = POWER_PRICE[p.id];
-    return `<div class="pwrow"><button class="pw btn3d woodb ${n && !why ? '' : 'empty'}" data-m="power:${p.id}"><div class="pi">${p.icon}</div><div class="pt"><b>${p.name}</b><span>${p.desc}${why ? ` · <i>${esc(why)}</i>` : ''}</span></div><div class="pc">×${n}</div></button><button class="pwbuy btn3d ${profile.shards >= price ? 'blueb' : 'stoneb'}" data-m="buypower:${p.id}" title="Buy one for ${price} Shards">+1<span>${SH}${price}</span></button></div>`;
+    return `<div class="pwrow"><button class="pw btn sec ${n && !why ? '' : 'empty'}" data-m="power:${p.id}"><div class="pi">${POWER_ICON[p.id] ?? ICON.sparkle}</div><div class="pt"><b>${p.name}</b><span>${p.desc}${why ? ` · <i>${esc(why)}</i>` : ''}</span></div><div class="pc">×${n}</div></button><button class="pwbuy btn ${profile.shards >= price ? 'inf' : 'mut'}" data-m="buypower:${p.id}" title="Buy one for ${price} Shards">+1<span>${SH}${price}</span></button></div>`;
   }).join('');
   modal(`<h2>Powers</h2><div class="wallet">${SH} <b>${fmt(profile.shards)}</b> Shards</div>
-    <div class="hint">One-shot items, up to ${Game.POWERS_PER_BATTLE} per battle (${used} used). Win them by finishing games, or buy them with Shards from your Vault.</div>${rows}<button class="mbtn btn3d woodb" data-m="resume">Close</button>`);
+    <div class="hint">One-shot items, up to ${Game.POWERS_PER_BATTLE} per battle (${used} used). Win them by finishing games, or buy them with Shards from your Vault.</div>${rows}<button class="mbtn btn sec" data-m="resume">Close</button>`);
 }
 
 // ---------------------------------------------------------------- Shard Vault
@@ -912,17 +913,17 @@ function vaultWidget() {
   const now = Date.now(), stored = vaultStored(profile, now), cap = vaultCap(profile), full = stored >= cap;
   return `<div class="vault ${full ? 'full' : ''}" id="vaultw"><div class="v-top">${ICON.shard}<div class="v-t"><b>${VAULT_LEVELS[profile.vaultLevel].name}</b><span>${full ? 'Full! Collect to keep it filling' : `+1 Shard a minute · full in ${fmtDur(vaultFullIn(profile, now))}`}</span></div><div class="v-wallet" title="Your Shards">${SH}<b>${fmt(profile.shards)}</b></div></div>
     <div class="v-bar"><i style="width:${(stored / cap) * 100}%"></i><span>${stored} / ${cap}</span></div>
-    <div class="v-btns"><button class="btn3d ${stored ? 'gilt' : 'stoneb'}" data-g="collect">Collect${stored ? ` ${stored}` : ''}</button><button class="btn3d blueb" data-g="shop">Shard Shop</button></div></div>`;
+    <div class="v-btns"><button class="btn ${stored ? 'pri' : 'mut'}" data-g="collect">Collect${stored ? ` ${stored}` : ''}</button><button class="btn inf" data-g="shop">Shard Shop</button></div></div>`;
 }
 function shopScreen() {
   const next = VAULT_LEVELS[profile.vaultLevel + 1];
-  const rows = POWERS.map((p) => { const price = POWER_PRICE[p.id]; return `<button class="pw btn3d ${profile.shards >= price ? 'woodb' : 'stoneb'}" data-g="buypower:${p.id}"><div class="pi">${p.icon}</div><div class="pt"><b>${p.name}</b><span>${p.desc} · you own ${profile.powers[p.id] ?? 0}</span></div><div class="pc price">${SH}${price}</div></button>`; }).join('');
+  const rows = POWERS.map((p) => { const price = POWER_PRICE[p.id]; return `<button class="pw btn ${profile.shards >= price ? 'sec' : 'mut'}" data-g="buypower:${p.id}"><div class="pi">${POWER_ICON[p.id] ?? ICON.sparkle}</div><div class="pt"><b>${p.name}</b><span>${p.desc} · you own ${profile.powers[p.id] ?? 0}</span></div><div class="pc price">${SH}${price}</div></button>`; }).join('');
   return `<div class="mh">Shard Shop</div>${vaultWidget()}
     <div class="panel shop-panel"><div class="ti-h">Bigger vault</div>
-      ${next ? `<button class="pw btn3d ${profile.shards >= next.cost ? 'gilt' : 'stoneb'}" data-g="vaultup"><div class="pi">${ICON.shard}</div><div class="pt"><b>${next.name}</b><span>Holds ${next.cap} Shards instead of ${vaultCap(profile)}, so you can stay away ${fmtDur(next.cap * 60000)} before it fills.</span></div><div class="pc price">${SH}${next.cost}</div></button>` : '<div class="hint">Your vault is as big as it gets: 500 Shards.</div>'}
+      ${next ? `<button class="pw btn ${profile.shards >= next.cost ? 'pri' : 'mut'}" data-g="vaultup"><div class="pi">${ICON.shard}</div><div class="pt"><b>${next.name}</b><span>Holds ${next.cap} Shards instead of ${vaultCap(profile)}, so you can stay away ${fmtDur(next.cap * 60000)} before it fills.</span></div><div class="pc price">${SH}${next.cost}</div></button>` : '<div class="hint">Your vault is as big as it gets: 500 Shards.</div>'}
       <div class="ti-h">Powers (one-shot items, up to ${Game.POWERS_PER_BATTLE} per battle)</div>${rows}
       <div class="hint">You also earn Shards by playing: ${SHARDS_PER_WAVE} per wave, ${SHARDS_BOSS_WAVE} for boss waves, ${SHARDS_VICTORY} for a victory.</div></div>
-    <button class="mbtn btn3d woodb" data-g="main">Back</button>`;
+    <button class="mbtn btn sec" data-g="main">Back</button>`;
 }
 setInterval(() => { // keep the vault display live while a menu is open
   if (!menuWrap.classList.contains('on') || (menuScreen !== 'main' && menuScreen !== 'shop')) return;
@@ -954,32 +955,38 @@ function showMenu(screen: 'main' | 'play' | 'tree' | 'settings' | 'how' | 'shop'
   if (screen === 'play') { menu.innerHTML = setupScreen(); menu.querySelectorAll<HTMLCanvasElement>('canvas[data-map]').forEach((c) => drawMapPreview(c, c.dataset.map!)); return; }
   h = '<div class="mwrap">';
   if (screen === 'main') {
-    h += `<div class="logo">Shatterspire</div><div class="tagline">Fantasy Tower Defense</div>
-      ${run ? `<button class="mbtn big btn3d gilt" data-g="continue">${ICON.play} Continue · Wave ${run.round + 1}</button>` : ''}
-      <button class="mbtn btn3d ${run ? 'woodb' : 'big gilt'}" data-g="play">${ICON.swords} ${run ? 'New Game' : 'Play'}</button>
-      <button class="mbtn btn3d woodb" data-g="tree">${ICON.book} Knowledge <span class="num">(${perkPointsLeft(profile)})</span></button>
-      <button class="mbtn btn3d woodb" data-g="how">${ICON.target} How to Play</button>
-      <button class="mbtn btn3d woodb" data-g="settings">${ICON.menu} Settings</button>
+    const pts = perkPointsLeft(profile);
+    h += `<div class="brand"><div class="logo">Shatterspire</div><div class="tagline">Fantasy Tower Defense</div></div>
+      <div class="cta">
+        ${run ? `<button class="mbtn big btn pri" data-g="continue">${ICON.play}<span>Continue</span><small>Wave ${run.round + 1}</small></button>` : ''}
+        <button class="mbtn ${run ? '' : 'big'} btn ${run ? 'sec' : 'pri'}" data-g="play">${ICON.swords}<span>${run ? 'New game' : 'Play'}</span></button>
+      </div>
+      <div class="mgrid">
+        <button class="mtile" data-g="tree">${ICON.book}<b>Perks</b><span>${pts ? `Spend ${pts} point${pts > 1 ? 's' : ''}` : 'Upgrades'}</span>${pts ? `<i class="badge">${pts}</i>` : ''}</button>
+        <button class="mtile" data-g="shop">${ICON.shard}<b>Shard Shop</b><span>${fmt(profile.shards)} Shards</span></button>
+        <button class="mtile" data-g="how">${ICON.target}<b>How to play</b><span>The basics</span></button>
+        <button class="mtile" data-g="settings">${ICON.menu}<b>Settings</b><span>Sound, graphics</span></button>
+      </div>
       ${vaultWidget()}
-      <div class="small-note">Medals ${medalCount(profile)} · Rounds played ${profile.totalRounds}</div>`;
+      <div class="small-note">${ICON.medal.replace('class="ico"', 'class="ico sm"')} ${medalCount(profile)} medals · ${fmt(profile.totalRounds)} rounds played</div>`;
   } else if (screen === 'shop') {
     h += shopScreen();
   } else if (screen === 'tree') {
     const left = perkPointsLeft(profile);
-    h += `<div class="mh">Knowledge</div><div class="panel"><div class="hint" style="text-align:center">Earn points from medals (1 per map per difficulty) and every 30 rounds played. Points available: <b style="color:#a8680f">${left}</b>. Second-row perks need 2 perks in the same branch.</div><div class="tree">`;
+    h += `<div class="mh">Perks</div><div class="panel"><div class="hint center">Earn points from medals (1 per map per difficulty) and every 30 rounds played. Points to spend: <b class="accent">${left}</b>. Second-row perks need 2 perks in the same branch.</div><div class="tree">`;
     for (const b of ['economy', 'military', 'arcane'] as const) {
       h += `<div class="branch"><h3>${b}</h3>`;
       for (const p of PERKS.filter((x) => x.branch === b)) {
         const owned = profile.perks.includes(p.id);
         const can = canBuyPerk(p.id, profile.perks, left);
-        h += `<button class="perk btn3d ${owned ? 'gilt' : can ? 'woodb' : 'stoneb na'}" data-g="perk:${p.id}"><b>${owned ? '✔ ' : p.tier === 2 ? '★ ' : ''}${esc(p.name)}</b><span>${esc(p.desc)}</span></button>`;
+        h += `<button class="perk btn ${owned ? 'pri' : can ? 'sec' : 'mut na'} ${p.tier === 2 ? 't2' : ''}" data-g="perk:${p.id}"><b>${esc(p.name)}</b><span>${esc(p.desc)}</span>${owned ? '<i class="perk-st">Owned</i>' : p.tier === 2 ? '<i class="perk-st">Tier 2</i>' : ''}</button>`;
       }
       h += '</div>';
     }
-    h += `</div></div><button class="mbtn btn3d redb" data-g="reset">Refund all perks</button><button class="mbtn btn3d woodb" data-g="main">Back</button>`;
+    h += `</div></div><button class="mbtn btn dan" data-g="reset">Refund all perks</button><button class="mbtn btn sec" data-g="main">Back</button>`;
   } else if (screen === 'settings') {
     const st = profile.settings;
-    const tog = (k: string, label: string, on: boolean) => `<button class="toggle btn3d ${on ? 'gilt' : 'woodb'}" data-g="${k}" aria-pressed="${on}"><span>${label}</span><span>${on ? 'ON' : 'OFF'}</span></button>`;
+    const tog = (k: string, label: string, on: boolean) => `<button class="toggle ${on ? 'on' : ''}" data-g="${k}" role="switch" aria-pressed="${on}"><span>${label}</span><i class="sw" aria-label="${on ? 'On' : 'Off'}"></i></button>`;
     h += `<div class="mh">Settings</div><div class="setlist">
       ${tog('sfx', 'Sound effects', st.sfx)}
       <label class="slider"><span>Effects volume</span><input type="range" min="0" max="100" value="${Math.round(st.sfxVol * 100)}" data-s="sfxVol"></label>
@@ -987,25 +994,26 @@ function showMenu(screen: 'main' | 'play' | 'tree' | 'settings' | 'how' | 'shop'
       <label class="slider"><span>Music volume</span><input type="range" min="0" max="100" value="${Math.round(st.musicVol * 100)}" data-s="musicVol"></label>
       ${tog('auto', 'Auto-start waves', st.autoStart)}
       ${tog('advisor', 'Advisor tips (★ suggested tower)', st.advisor)}
-      <button class="toggle btn3d woodb" data-g="quality"><span>Graphics</span><span>${st.quality === 'high' ? 'HIGH' : 'LOW (battery saver)'}</span></button>
-      ${document.fullscreenEnabled ? `<button class="toggle btn3d woodb" data-g="full"><span>Fullscreen</span><span>${document.fullscreenElement ? 'ON' : 'OFF'}</span></button>` : ''}
-      <button class="toggle btn3d woodb" data-g="tutorial"><span>Replay tutorial</span><span>${profile.tutorialDone ? 'NEXT GAME' : 'ON'}</span></button>
-      <button class="toggle btn3d woodb" data-g="credits"><span>Credits &amp; licences</span><span>›</span></button>
-      <button class="mbtn btn3d redb" data-g="wipe">Reset all progress</button>
-      <button class="mbtn btn3d woodb" data-g="main">Back</button></div>`;
+      <button class="toggle" data-g="quality"><span>Graphics</span><em>${st.quality === 'high' ? 'High' : 'Battery saver'}</em></button>
+      ${document.fullscreenEnabled ? `<button class="toggle ${document.fullscreenElement ? 'on' : ''}" data-g="full" role="switch" aria-pressed="${!!document.fullscreenElement}"><span>Fullscreen</span><i class="sw"></i></button>` : ''}
+      <button class="toggle" data-g="tutorial"><span>Replay tutorial</span><em>${profile.tutorialDone ? 'Next game' : 'On'}</em></button>
+      <button class="toggle" data-g="credits"><span>Credits &amp; licences</span>${ICON.next}</button>
+      <button class="mbtn btn dan" data-g="wipe">Reset all progress</button>
+      <button class="mbtn btn sec" data-g="main">Back</button></div>`;
   } else {
-    h += `<div class="mh">How to Play</div><div class="panel howto">
-      <p>🏰 Enemies march down the road toward your Spire. Every enemy that gets through costs lives: one per layer it still has.</p>
-      <p>💥 <b>Enemies come in layers.</b> Hit an Ogre and it becomes a Troll, then an Orc, then a Goblin, then an Imp. Big enemies burst into several smaller ones.</p>
-      <p>🛡 <b>Counters matter.</b> The Next Wave box warns you: SHARP-PROOF Ironclads shrug off arrows and swords, BLAST-PROOF Glooms ignore explosions, COLD-PROOF Frostlings ignore frost, MAGIC-PROOF Hexlings ignore magic, and SHADOWED enemies are invisible without True Sight.</p>
-      <p>🐘 <b>Giants</b> (from wave 26) have huge health and cost hundreds of lives if they leak. Build heavy single-target damage before they arrive.</p>
-      <p>🧭 <b>Tower groups:</b> ${GROUPS.filter((g) => g.id !== 'hero').map((g) => `<b>${esc(g.name)}</b> (${g.towers.map((t) => esc(TOWER_MAP[t].name)).join(', ')}): ${esc(g.how)}`).join(' ')}</p>
-      <p>⬆ <b>Upgrades:</b> every tower has 3 paths of 5 tiers. You can upgrade 2 paths, and only one of them past tier 2 (e.g. 5-2-0).</p>
-      <p>🚩 <b>Barracks</b> soldiers hold enemies in place. The flag shows where they stand; use <i>Move Rally Point</i> to post them anywhere on the road nearby.</p>
-      <p>⏱ <b>Spells and abilities recharge only while a wave is running</b>, in game time, so 2×/3× speed recharges them faster. Between waves the timer waits (⏸). Reinforce Walls can be cast any time but can't raise lives above your starting total.</p>
-      <p>💰 You earn gold for every layer popped, a bonus each wave, and 0.5% interest on banked gold (max 20). Gold in the bank doesn't defend you, so spend it before big waves.</p>
-      <p>⌨️ PC: Space = next wave, F = speed, A = auto, P/Esc = pause, 1-0 = towers, Shift = keep building, , . / = upgrade paths, Delete = sell.</p>
-      </div><button class="mbtn btn3d woodb" data-g="main" style="margin-top:16px">Back</button>`;
+    const card = (ic: string, t: string, body: string) => `<div class="hcard">${ic}<div><b>${t}</b><p>${body}</p></div></div>`;
+    h += `<div class="mh">How to Play</div><div class="howto">
+      ${card(ICON.castle, 'Defend the Spire', 'Enemies march down the road toward your Spire. Each one that gets through costs lives: one per layer it still has.')}
+      ${card(ICON.shield, 'Enemies come in layers', 'Hit an Ogre and it becomes a Troll, then an Orc, a Goblin, an Imp. Big enemies burst into several smaller ones.')}
+      ${card(ICON.target, 'Counters matter', 'The Next Wave box warns you. Ironclads shrug off arrows and swords, Glooms ignore explosions, Frostlings ignore frost, Hexlings ignore magic, and Shadowed enemies are invisible without True Sight.')}
+      ${card(ICON.skull, 'Giants', 'From wave 26 giants arrive with huge health and cost hundreds of lives if they leak. Build heavy single-target damage before they come.')}
+      ${card(ICON.swords, 'Tower groups', GROUPS.filter((g) => g.id !== 'hero').map((g) => `<b>${esc(g.name)}</b> (${g.towers.map((t) => esc(TOWER_MAP[t].name)).join(', ')}): ${esc(g.how)}`).join(' '))}
+      ${card(ICON.up, 'Upgrades', 'Every tower has 3 paths of 5 tiers. You can upgrade 2 paths, and only one of them past tier 2 (for example 5-2-0).')}
+      ${card(ICON.flag, 'Barracks', 'Soldiers hold enemies in place. The flag shows where they stand; use Move rally to post them anywhere on the road nearby.')}
+      ${card(ICON.hourglass, 'Spells recharge in battle', 'Spells and abilities recharge only while a wave is running, so 2× and 3× speed recharge them faster. Reinforce Walls works any time but never raises lives above your starting total.')}
+      ${card(ICON.coin, 'Gold', 'You earn gold for every layer broken, a bonus each wave, and 0.5% interest on banked gold (max 20). Gold in the bank does not defend you, so spend it before big waves.')}
+      ${card(ICON.menu, 'Keyboard', 'Space next wave · F speed · A auto · P or Esc pause · 1-0 towers · Shift keep building · , . / upgrade paths · Delete sell.')}
+      </div><button class="mbtn btn sec" data-g="main">Back</button>`;
   }
   h += '</div>';
   menu.innerHTML = h;
@@ -1013,23 +1021,23 @@ function showMenu(screen: 'main' | 'play' | 'tree' | 'settings' | 'how' | 'shop'
 
 /** Battle setup: everything on one screen, Begin Battle pinned to the bottom. */
 function setupScreen() {
-  const medalsOf = (id: string) => { const md = profile.medals[id] ?? {}; return (['easy', 'medium', 'hard'] as const).map((d, i) => `<i class="${md[d] ? 'got' : ''}" title="${DIFF[d].label}">${md[d] ? ['🥉', '🥈', '🥇'][i] : '◇'}</i>`).join(''); };
+  const medalsOf = (id: string) => { const md = profile.medals[id] ?? {}; return (['easy', 'medium', 'hard'] as const).map((d) => `<i class="md-${d} ${md[d] ? 'got' : ''}" title="${DIFF[d].label}${md[d] ? ': medal earned' : ''}"></i>`).join(''); };
   let maps = '';
   for (const m of MAPS) {
     const un = mapUnlocked(profile, m.id);
-    maps += `<button class="mapc ${pick.map === m.id ? 'sel' : ''} ${un ? '' : 'locked'}" data-g="${un ? 'map:' + m.id : 'lockedmap:' + m.id}" aria-pressed="${pick.map === m.id}"><canvas data-map="${m.id}" width="300" height="200"></canvas><div class="mi"><div class="mn">${un ? '' : '🔒 '}${esc(m.name)}</div><div class="md">${esc(m.difficultyLabel)}</div><div class="medals">${medalsOf(m.id)}</div></div></button>`;
+    maps += `<button class="mapc ${pick.map === m.id ? 'sel' : ''} ${un ? '' : 'locked'}" data-g="${un ? 'map:' + m.id : 'lockedmap:' + m.id}" aria-pressed="${pick.map === m.id}"><canvas data-map="${m.id}" width="300" height="200"></canvas><div class="mi"><div class="mn">${un ? '' : `${ICON.lock.replace('class="ico"', 'class="ico sm"')} `}${esc(m.name)}</div><div class="md">${esc(m.difficultyLabel)}</div><div class="medals">${medalsOf(m.id)}</div></div></button>`;
   }
   let diffs = '';
-  for (const d of ['easy', 'medium', 'hard'] as Difficulty[]) diffs += `<button class="btn3d ${pick.diff === d ? 'gilt' : 'woodb'}" data-g="diff:${d}" aria-pressed="${pick.diff === d}">${DIFF[d].label}<small>${DIFF[d].lives} lives${d === 'hard' ? ' · tough giants' : d === 'easy' ? ' · cheaper' : ''}</small></button>`;
+  for (const d of ['easy', 'medium', 'hard'] as Difficulty[]) diffs += `<button class="btn ${pick.diff === d ? 'pri' : 'sec'}" data-g="diff:${d}" aria-pressed="${pick.diff === d}">${DIFF[d].label}<small>${DIFF[d].lives} lives${d === 'hard' ? ' · tough giants' : d === 'easy' ? ' · cheaper' : ''}</small></button>`;
   let heroes = '';
   for (const hd of HEROES) {
     const un = heroUnlocked(profile, hd.id);
-    heroes += `<button class="heroc ${pick.hero === hd.id ? 'sel' : ''} ${un ? '' : 'locked'}" data-g="${un ? 'hero:' + hd.id : 'lockedhero:' + hd.id}" aria-pressed="${pick.hero === hd.id}">${img(hd.id, true, 44)}<div class="hn">${un ? '' : '🔒 '}${esc(hd.name)}</div></button>`;
+    heroes += `<button class="heroc ${pick.hero === hd.id ? 'sel' : ''} ${un ? '' : 'locked'}" data-g="${un ? 'hero:' + hd.id : 'lockedhero:' + hd.id}" aria-pressed="${pick.hero === hd.id}">${img(hd.id, true, 44)}<div class="hn">${un ? '' : `${ICON.lock.replace('class="ico"', 'class="ico sm"')} `}${esc(hd.name)}</div></button>`;
   }
   const hd = HERO_MAP[pick.hero];
   const map = MAPS.find((m) => m.id === pick.map)!;
   return `<div class="setup">
-    <div class="su-head"><button class="su-back btn3d woodb" data-g="main">‹ Back</button><div class="su-title">Prepare for Battle</div></div>
+    <div class="su-head"><button class="su-back btn sec" data-g="main" aria-label="Back">${ICON.back}<span>Back</span></button><div class="su-title">Prepare for Battle</div></div>
     <div class="su-body">
       <section class="su-maps"><div class="su-h">Map</div><div class="maps">${maps}</div></section>
       <section class="su-opts">
@@ -1040,7 +1048,7 @@ function setupScreen() {
     </div>
     <div class="su-foot">
       <div class="su-sum"><b>${esc(map.name)}</b><span>${DIFF[pick.diff].label} · ${esc(hd.name)} · ${DIFF[pick.diff].lives} lives</span></div>
-      <button class="su-go btn3d greenb" data-g="start">${ICON.swords}<span>Begin Battle</span></button>
+      <button class="su-go btn go" data-g="start">${ICON.swords}<span>Begin Battle</span></button>
     </div></div>`;
 }
 
@@ -1153,8 +1161,7 @@ function startAttract() {
 function sizeAttract() {
   const w = window.innerWidth, h = window.innerHeight;
   const s = Math.max(w / WORLD_W, h / WORLD_H);
-  attractR.resize(Math.ceil(WORLD_W * s), Math.ceil(WORLD_H * s));
-  attractR.dpr = Math.min(attractR.dpr, 1.25); // it's blurred anyway
+  attractR.resize(Math.ceil(WORLD_W * s), Math.ceil(WORLD_H * s), 1.25); // it's blurred anyway
   menuBg.style.left = `${(w - WORLD_W * s) / 2}px`; menuBg.style.top = `${(h - WORLD_H * s) / 2}px`;
   menuBg.style.width = `${WORLD_W * s}px`; menuBg.style.height = `${WORLD_H * s}px`;
 }

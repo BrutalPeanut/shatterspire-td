@@ -133,6 +133,20 @@ Owner wants an epic, grounded high-fantasy look for adults 18-45 (see the brief 
 - **Test links:** `?unlockall` unlocks everything; `?fresh` erases the saved profile for a true first-run test (it cleans itself out of the URL so a refresh does not erase again). They combine.
 - **Still to do from the 18-45 restyle brief:** muted palette, serif UI type (drop Lilita One), lean realistic proportions, original orchestral ambience, menus restyled; fix boss banners over the map, portrait ability-strip overflow, unreadable medallion labels, locked-vs-unaffordable tile states, "Layers" jargon, and the difficulty cliff at boss waves (bot: Medium flawless, Hard loses 66-142 lives in wave 30 alone).
 
+## Modern UI rework (2026-11-20, PR #19) -- READ THIS BEFORE TOUCHING CSS
+
+Owner: "The ui just still feels so non-modern. Do a full rework on it and base it on modern successful games."
+Direction: dark layered glass panels over the living map (Genshin Impact / AFK Journey), big bold icon-first touch targets and one look across battle and menus (Clash Royale). One accent (amber) for primary actions, green only for Start and buying upgrades, red only for danger.
+
+- **One stylesheet: `src/ui.css`.** `style.css` and `battle.css` are deleted (they were two layers of overrides, half dead). Tokens at the top (`--bg`, `--card`, `--glass`, `--accent`, `--go`, `--danger`, radii, `--f` = Inter, `--f-title` = Cinzel). Add to it; do not add another override file.
+- **Fonts:** Inter (variable, Latin only via `src/fonts.css`; the package's own CSS pulls every alphabet and bloats the single-file build), Cinzel 700 for titles, Cinzel Decorative only for the logo. Lilita One and Nunito removed.
+- **Icons:** `src/ui/icons.ts` is a new single-weight glyph set drawn for this game (currentColor; only heart/coin/shard are coloured). `SPELL_ICON` and `POWER_ICON` replace the emoji in spell/power data. No emoji anywhere in the UI.
+- **Button classes renamed** for honesty: `btn` (was btn3d), `pri` (gilt), `sec` (woodb), `mut` (stoneb), `dan` (redb), `inf` (blueb), `go` (greenb).
+- **Battle:** HUD is glass pills (lives, gold, wave with a progress bar, pause). Rail = next-wave card, labelled group sections (colour dot + name), cards with a group-colour stripe and price. Controls = Auto, Speed, and a wide green Start (round on phones). Upgrade panel = glass side sheet that hugs its content (phones: bottom sheet over the tower area), targeting is a 4-way segmented control (`data-a="tmode"`), path rows with segmented pips and green buy buttons.
+- **Menus:** main menu = logo, one big Play/Continue, a 2x2 tile grid (Perks, Shard Shop, How to play, Settings), vault card. Settings use switches. How to Play is icon cards. Dialogs are centred cards, bottom sheets on phones.
+- **Bug fixed on the way:** `Renderer.resize(w, h, maxDpr)` now applies the pixel-density cap before sizing the buffer. Before, the menu background and the whole battle map in Battery-saver mode drew into only part of their canvas on high-density screens.
+- Tests key on ids, data attributes and a few structural classes (`.tile`, `.grp-h`, `.tq-sub`, `.ug`, `.rc-*`, `.vault`, `.pw`, `.abw`). Keep them. `inner_text` returns CSS-uppercased text, so compare case-insensitively for headings.
+
 ## Map-first battle screen (2026-11-16, PR #11)
 
 Owner hated the previous battle UI and asked for the standard modern TD layout.

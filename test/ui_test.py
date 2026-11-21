@@ -39,7 +39,7 @@ with sync_playwright() as p:
     check(pg.evaluate("__ss ? 1 : 0") == 1, 'reload after ?fresh still runs')
     pg.goto(BASE + '&t=d1b'); pg.wait_for_timeout(600)
     pg.click('[data-g="settings"]'); pg.click('[data-g="credits"]'); pg.wait_for_timeout(80)
-    check('SIL Open Font License' in pg.inner_text('#modal') and 'original game' in pg.inner_text('#modal'), 'Settings > Credits lists the font licences')
+    check('sil open font license' in pg.inner_text('#modal').lower() and 'original game' in pg.inner_text('#modal'), 'Settings > Credits lists the font licences')
     pg.click('[data-m="resume"]'); pg.click('[data-g="main"]'); pg.wait_for_timeout(80)
     check(pg.locator('#modal.on').count() == 0 and pg.locator('[data-g="play"]').count() == 1, 'Credits closes back to the menu')
     new_game(pg)

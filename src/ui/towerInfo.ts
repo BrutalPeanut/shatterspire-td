@@ -74,15 +74,15 @@ export function baseStats(defId: string, isHero: boolean) {
 // ---------------------------------------------------------------- tower groups (how to use them)
 export interface TowerGroup { id: string; name: string; short: string; how: string; color: string; towers: string[] }
 export const GROUPS: TowerGroup[] = [
-  { id: 'hero', name: 'Hero', short: 'Levels up', color: '#6a55a8', towers: ['hero'],
+  { id: 'hero', name: 'Hero', short: 'Levels up', color: '#A78BFA', towers: ['hero'],
     how: 'One per battle. Levels up every 2-3 waves (max level 10) and unlocks two abilities. Put it where the fighting is heaviest.' },
-  { id: 'crowd', name: 'Crowd Damage', short: 'Hit groups', color: '#a9492e', towers: ['knight', 'mage', 'cannon'],
+  { id: 'crowd', name: 'Crowd Damage', short: 'Hit groups', color: '#FB7B4B', towers: ['knight', 'mage', 'cannon'],
     how: 'Hit many enemies at once. Your answer to swarms. Put them on bends and where the road doubles back, so they reach more of it.' },
-  { id: 'single', name: 'Single Target', short: 'Big enemies', color: '#3f6c9e', towers: ['archer', 'ballista'],
+  { id: 'single', name: 'Single Target', short: 'Big enemies', color: '#60A5FA', towers: ['archer', 'ballista'],
     how: 'Pour damage into one enemy at a time. Your answer to giants and bosses. Set targeting to Strong when giants show up.' },
-  { id: 'control', name: 'Control', short: 'Slow & hold', color: '#2f7f74', towers: ['barracks', 'druid'],
+  { id: 'control', name: 'Control', short: 'Slow & hold', color: '#2DD4BF', towers: ['barracks', 'druid'],
     how: 'Slow or hold enemies so your damage towers get more hits. Put them inside your damage towers\' range, never on their own.' },
-  { id: 'support', name: 'Support & Gold', short: 'Buff & earn', color: '#a37a26', towers: ['alchemist', 'bard', 'mine'],
+  { id: 'support', name: 'Support & Gold', short: 'Buff & earn', color: '#FBBF24', towers: ['alchemist', 'bard', 'mine'],
     how: 'Make nearby towers stronger, or earn gold. They barely attack, so build them once your defense is holding and place buffers next to your best towers.' },
 ];
 export function groupOf(id: string): TowerGroup { return GROUPS.find((g) => g.towers.includes(id)) ?? GROUPS[0]; }
