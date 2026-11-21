@@ -51,7 +51,7 @@ export function analyzeDefeat(g: Game): Recap {
   }
 
   if (boss) {
-    cause = `${boss.name} reached the Spire. A boss that gets through ends the game instantly.`;
+    cause = `${boss.name} reached the Spire. A boss that gets through costs lives for every bit of health it has left.`;
     tips.push({ text: 'Bosses have huge health. Stack heavy single-target damage (Ballista, Cannon Big Bombs, Mage Meteor) and save Meteor Shower, Time Freeze and hero abilities for them.', tower: 'ballista' });
   } else if (giant && giant.lives >= totalLeak * 0.4) {
     cause = `A ${giant.name} broke through and cost ${giant.lives} lives. Giants carry hundreds of layers inside them.`;
