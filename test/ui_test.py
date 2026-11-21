@@ -66,8 +66,9 @@ with sync_playwright() as p:
     vis = pg.evaluate("[...document.querySelectorAll('#toast .toast, #coach.on, #tip.on')].filter(e => e.offsetParent).length")
     check(covered == [] and vis == 0, f'nothing covers the map while dragging ({covered[:3]}, {vis} floating)')
     pg.mouse.up(); pg.wait_for_timeout(100)
-    check(towers(pg) == 2 and 'Too close to the path' in pg.inner_text('#slot'), 'invalid drop builds nothing, keeps the tower in hand, and the slot keeps the reason')
-    pg.keyboard.press('Escape')
+    check(towers(pg) == 2 and pg.evaluate('__ss.ui().placing') is None and 'Too close to the path' in pg.inner_text('#toast'), 'invalid drop builds nothing, sends the tower back to its card, and says why')
+    pg.mouse.click(road['x'] + 3, road['y'] + 3); pg.wait_for_timeout(80)
+    check(towers(pg) == 2, 'a later tap on the map does not build the dropped tower')
     # 4. drop back on the panel cancels
     c = pg.locator('.tile[data-v="archer"]').bounding_box()
     pg.mouse.move(c['x'] + 30, c['y'] + 30); pg.mouse.down(); pg.mouse.move(c['x'] + 90, c['y'] + 120, steps=5); pg.mouse.up(); pg.wait_for_timeout(100)
@@ -372,6 +373,59 @@ with sync_playwright() as p:
     pg.touchscreen.tap(w['x'], w['y']); pg.wait_for_timeout(250)
     foot = pg.evaluate("(() => { const f = document.querySelector('#tpanel.on .tq-foot'); return f ? f.getBoundingClientRect().bottom <= innerHeight : false; })()")
     check(foot and pg.evaluate(OVER) == 0, 'upgrade panel shows all three paths and Sell on screen, off the map')
+    ctx.close()
+
+    # ------------------------------------------------ drag & drop feel (Bloons-style)
+    print('drag and drop')
+    ctx = b.new_context(viewport={'width': 780, 'height': 360}, is_mobile=True, has_touch=True, device_scale_factor=2); pg = ctx.new_page()
+    pg.goto(BASE + '&t=dd'); pg.wait_for_timeout(600)
+    pg.tap('[data-g="play"]'); pg.wait_for_timeout(200); pg.tap('.su-go'); pg.wait_for_timeout(500)
+    if pg.locator('#coach.on [data-c="skip"]').count(): pg.tap('#coach [data-c="skip"]')
+    pg.evaluate('__ss.game.gold = 9000'); pg.wait_for_timeout(100)
+    cdp = ctx.new_cdp_session(pg)
+    def touch(kind, x, y): cdp.send('Input.dispatchTouchEvent', {'type': kind, 'touchPoints': [] if kind == 'touchEnd' else [{'x': x, 'y': y}]})
+    c = pg.locator('.tile[data-v="archer"]').bounding_box(); cx, cy = c['x'] + c['width'] / 2, c['y'] + c['height'] / 2
+    # a vertical swipe on the side rail scrolls the list, never a drag, never "interrupted"
+    top0 = pg.evaluate("document.querySelector('#tiles').scrollTop")
+    touch('touchStart', cx, cy)
+    for i in range(1, 11): touch('touchMove', cx + 1, cy - i * 9); pg.wait_for_timeout(16)
+    touch('touchEnd', 0, 0); pg.wait_for_timeout(400)
+    check(pg.evaluate("document.querySelector('#tiles').scrollTop") > top0 and pg.evaluate('__ss.ui().placing') is None and pg.inner_text('#toast') == '', 'vertical swipe on the side rail scrolls the tower list')
+    pg.evaluate("document.querySelector('#tiles').scrollTop = 0"); pg.wait_for_timeout(100)
+    c = pg.locator('.tile[data-v="archer"]').bounding_box(); cx, cy = c['x'] + c['width'] / 2, c['y'] + c['height'] / 2
+    # the tower lifts off its card and follows the finger over the panel, then hands over to the map preview
+    touch('touchStart', cx, cy)
+    for i in range(1, 4): touch('touchMove', cx - i * 6, cy + 2); pg.wait_for_timeout(16)
+    av = pg.evaluate("(() => { const a = document.querySelector('#dragAv'); return { on: a.classList.contains('on'), over: a.classList.contains('over') }; })()")
+    check(av['on'] and not av['over'] and pg.locator('.tile.lifted').count() == 1, 'dragged tower follows the finger over the panel')
+    s2 = pg.evaluate(FIND_SPOT, True)
+    for i in range(1, 9): touch('touchMove', cx - 18 + (s2['x'] - cx + 18) * i / 8, cy + (s2['y'] + 42 - cy) * i / 8); pg.wait_for_timeout(16)
+    check(pg.evaluate("document.querySelector('#dragAv').classList.contains('over')") and pg.evaluate('__ss.ui().ghost') is not None, 'over the map the preview takes over from the floating tower')
+    touch('touchEnd', 0, 0); pg.wait_for_timeout(300)
+    check(towers(pg) == 1 and pg.evaluate("!document.querySelector('#dragAv').classList.contains('on')") and pg.locator('.tile.lifted').count() == 0, 'drop builds and the floating tower is gone')
+    # tapping the open tower again closes its panel
+    w = pg.evaluate("(() => { const t = __ss.game.towers[0]; return __ss.worldToClient(t.x, t.y); })()")
+    pg.touchscreen.tap(w['x'], w['y']); pg.wait_for_timeout(150); opened = pg.locator('#tpanel.on').count() == 1
+    pg.touchscreen.tap(w['x'], w['y']); pg.wait_for_timeout(150)
+    check(opened and pg.locator('#tpanel.on').count() == 0, 'tap a tower to open its panel, tap it again to close')
+    # drag a targeted spell (Meteor) from its button onto the map
+    pg.evaluate('__ss.game.startWave()'); pg.wait_for_timeout(2500)
+    m = pg.locator('#abil [data-ab="s:meteor:0"]').bounding_box(); mx, my = m['x'] + m['width'] / 2, m['y'] + m['height'] / 2
+    e = pg.evaluate("(() => { const pts = __ss.game.map.paths[0]; const q = pts[Math.floor(pts.length / 2)]; return __ss.worldToClient(q.x, q.y); })()")
+    touch('touchStart', mx, my)
+    for i in range(1, 9): touch('touchMove', mx + (e['x'] - mx) * i / 8, my + (e['y'] + 42 - my) * i / 8); pg.wait_for_timeout(16)
+    touch('touchEnd', 0, 0); pg.wait_for_timeout(200)
+    check(pg.evaluate("__ss.game.spells.find(s => s.id === 'meteor').left") > 0, f'drag Meteor from its button onto the map casts it ({pg.inner_text("#toast")!r}, {pg.evaluate("__ss.game.state")}, {e})')
+    ctx.close()
+    # mouse: click a card and the tower follows the cursor
+    ctx = b.new_context(viewport={'width': 1366, 'height': 768}); pg = ctx.new_page()
+    pg.goto(BASE + '&t=dm'); pg.wait_for_timeout(600)
+    pg.click('[data-g="play"]'); pg.wait_for_timeout(200); pg.click('.su-go'); pg.wait_for_timeout(500)
+    if pg.locator('#coach.on [data-c="skip"]').count(): pg.click('#coach [data-c="skip"]')
+    pg.click('.tile[data-v="archer"]'); pg.mouse.move(900, 500, steps=4); pg.wait_for_timeout(80)
+    check(pg.evaluate("document.querySelector('#dragAv').classList.contains('on')") and pg.evaluate('__ss.ui().placing') == 'archer', 'clicked tower follows the cursor until placed')
+    pg.keyboard.press('Escape'); pg.wait_for_timeout(80)
+    check(pg.evaluate("!document.querySelector('#dragAv').classList.contains('on')"), 'Escape puts it back')
     ctx.close()
     b.close()
 
