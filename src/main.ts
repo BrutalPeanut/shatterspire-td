@@ -546,22 +546,25 @@ function towerStatLine(t: Tower) {
   return parts.join(' · ');
 }
 
+/** Card label: long names drop their epithet ("Dwarven Cannon" → "Cannon") so they fit a phone card. */
+const cardName = (n: string) => (n.length > 12 ? n.split(' ').slice(-1)[0] : n);
+
 // Armory: built once per session, then updated in place so cards never move.
 function shopPanel() {
   const g = game!;
   const hd = g.heroDef;
   const tile = (id: string) => {
     const gc = groupOf(id).color;
-    if (id === 'hero') return `<button class="tile hero" style="--gc:${gc}" data-a="buy" data-v="hero" data-cost="${g.towerCost('hero')}" aria-label="${esc(hd.name)}">${img(hd.id, true)}<span class="tc">${ICON.coinSmall}<span>${fmt(g.towerCost('hero'))}</span></span></button>`;
+    if (id === 'hero') return `<button class="tile hero" style="--gc:${gc}" data-a="buy" data-v="hero" data-cost="${g.towerCost('hero')}" aria-label="${esc(hd.name)}">${img(hd.id, true)}<span class="tn">${esc(cardName(hd.name))}</span><span class="tc">${ICON.coinSmall}<span>${fmt(g.towerCost('hero'))}</span></span></button>`;
     const d = TOWER_MAP[id];
     const cost = g.towerCost(id);
     return towerUnlocked(profile, id)
-      ? `<button class="tile" style="--gc:${gc}" data-a="buy" data-v="${id}" data-cost="${cost}" aria-label="${esc(d.name)}">${img(id)}<span class="tc">${ICON.coinSmall}<span>${fmt(cost)}</span></span></button>`
-      : `<button class="tile locked" style="--gc:${gc}" data-a="buy" data-v="${id}" aria-label="${esc(d.name)} (locked)" data-lock="${esc(d.name)} unlocks after ${d.unlockRounds} rounds played (${d.unlockRounds - profile.totalRounds} to go)">${img(id)}<span class="tc lk">${ICON.lock.replace('class="ico"', 'class="ico sm"')}<span>${d.unlockRounds - profile.totalRounds} rds</span></span></button>`;
+      ? `<button class="tile" style="--gc:${gc}" data-a="buy" data-v="${id}" data-cost="${cost}" aria-label="${esc(d.name)}">${img(id)}<span class="tn">${esc(cardName(d.name))}</span><span class="tc">${ICON.coinSmall}<span>${fmt(cost)}</span></span></button>`
+      : `<button class="tile locked" style="--gc:${gc}" data-a="buy" data-v="${id}" aria-label="${esc(d.name)} (locked)" data-lock="${esc(d.name)} unlocks after ${d.unlockRounds} rounds played (${d.unlockRounds - profile.totalRounds} to go)">${img(id)}<span class="tn">${esc(cardName(d.name))}</span><span class="tc lk">${ICON.lock.replace('class="ico"', 'class="ico sm"')}<span>${d.unlockRounds - profile.totalRounds} rds</span></span></button>`;
   };
   // each job gets its own labelled, colour-coded section so the colours mean something at a glance
   const order = ['hero', 'single', 'crowd', 'control', 'support'];
-  return [...GROUPS].sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id)).map((gr) => `<section class="grp" style="--gc:${gr.color}">
+  return [...GROUPS].sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id)).map((gr) => `<section class="grp grp-${gr.id}" style="--gc:${gr.color};--n:${gr.towers.length}">
     <button class="grp-h" data-a="groups" data-v="${gr.id}" title="${esc(gr.how)}"><b>${esc(gr.name)}</b><span>${esc(gr.short)}</span>${ICON.info}</button>
     <div class="grp-g">${gr.towers.map(tile).join('')}</div><i class="grp-tip">${esc(gr.short)}</i></section>`).join('');
 }
